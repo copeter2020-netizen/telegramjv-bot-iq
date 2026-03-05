@@ -1,64 +1,61 @@
 import telebot
-import time
 import os
-from iqoptionapi.stable_api import IQ_Option
+import time
+from iq_connector import ConectorIQ
+from strategy import analizar
 
 TOKEN = os.getenv("TOKEN")
-EMAIL = os.getenv("IQ_EMAIL")
-PASSWORD = os.getenv("IQ_PASSWORD")
+CHAT_ID = os.getenv("CHAT_ID")
 
 bot = telebot.TeleBot(TOKEN)
 
-iq = IQ_Option(EMAIL, PASSWORD)
-iq.connect()
+pares = [
+    "EURUSD-OTC",
+    "GBPUSD-OTC",
+    "AUDCAD-OTC"
+]
 
-par = "EURUSD-OTC"
-timeframe = 60
+iq = ConectorIQ()
+iq.conectar()
 
-def analizar():
-    
-    velas = iq.get_candles(par, timeframe, 10, time.time())
+def enviar_senal(par, direccion):
 
-    verde = 0
-    roja = 0
-
-    for vela in velas:
-
-        if vela["open"] < vela["close"]:
-            verde += 1
-        else:
-            roja += 1
-
-    if verde > roja:
-        return "CALL"
-    else:
-        return "PUT"
-
-def enviar_senal():
-
-    while True:
-
-        direccion = analizar()
-
-        mensaje = f"""
+    mensaje = f"""
 📊 SEÑAL DETECTADA
 
 Par: {par}
 Dirección: {direccion}
 
-⏱ Expiración
-3m - 4m - 5m
+Entrada: siguiente vela
+Expiración: 3-5 minutos
 """
 
-        bot.send_message(TU_CHAT_ID, mensaje)
+    bot.send_message(CHAT_ID, mensaje)
+
+def analizar_mercado():
+
+    while True:
+
+        for par in pares:
+
+            velas = iq.velas(par)
+
+            decision = analizar(velas)
+
+            if decision:
+
+                enviar_senal(par, decision)
 
         time.sleep(60)
 
-@bot.message_handler(commands=["start"])
-def start(message):
+@bot.message_handler(commands=['start'])
+def start(msg):
 
-    bot.send_message(message.chat.id,"Bot conectado")
+    bot.reply_to(msg, "Bot de señales iniciado")
 
-if __name__ == "__main__":
+import threading
 
-    enviar_senal()
+hilo = threading.Thread(target=analizar_mercado)
+hilo.start()
+
+bot.infinity_polling()
