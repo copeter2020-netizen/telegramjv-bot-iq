@@ -1,4 +1,4 @@
 pyTelegramBotAPI
-iqoptionapi
 pandas
 numpy
+git+https://github.com/iqoptionapi/iqoptionapi.git
