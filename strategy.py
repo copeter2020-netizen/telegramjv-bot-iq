@@ -168,3 +168,4 @@ def analizar(conector, par):
             return f"PUT\nProbabilidad: {prob}%"
 
     return None 
+    # update
