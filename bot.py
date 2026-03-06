@@ -12,23 +12,17 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = telebot.TeleBot(TOKEN)
 
-# eliminar webhook para evitar error 409
+# evitar conflicto 409
 bot.delete_webhook()
 
-pares = [
-"EURUSD-OTC",
-"GBPUSD-OTC",
-"AUDCAD-OTC",
-"USDJPY-OTC",
-"EURGBP-OTC",
-"AUDUSD-OTC",
-"EURJPY-OTC",
-"GBPJPY-OTC",
-"NZDUSD-OTC"
-]
-
+# conectar IQ Option
 iq = ConectorIQ()
 iq.conectar()
+
+# obtener pares OTC activos
+pares = iq.obtener_pares_abiertos()
+
+print("Pares OTC activos:", pares)
 
 
 def enviar_senal(par, direccion, tiempo, conf):
@@ -92,7 +86,7 @@ def start(msg):
     bot.reply_to(msg, "🤖 Bot de señales iniciado")
 
 
-# hilo del análisis
+# hilo para analizar mercado
 hilo = threading.Thread(target=analizar_mercado)
 
 hilo.daemon = True
@@ -100,7 +94,7 @@ hilo.daemon = True
 hilo.start()
 
 
-# polling seguro para evitar congelamiento
+# polling seguro
 while True:
 
     try:
@@ -111,4 +105,4 @@ while True:
 
         print("Error polling:", e)
 
-        time.sleep(10)
+        time.sleep(10) 
