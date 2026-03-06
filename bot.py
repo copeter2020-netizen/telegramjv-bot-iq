@@ -12,6 +12,9 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = telebot.TeleBot(TOKEN)
 
+# eliminar webhook para evitar error 409
+bot.delete_webhook()
+
 pares = [
 "EURUSD-OTC",
 "GBPUSD-OTC",
@@ -89,6 +92,7 @@ def start(msg):
     bot.reply_to(msg, "🤖 Bot de señales iniciado")
 
 
+# hilo del análisis
 hilo = threading.Thread(target=analizar_mercado)
 
 hilo.daemon = True
@@ -96,6 +100,7 @@ hilo.daemon = True
 hilo.start()
 
 
+# polling seguro para evitar congelamiento
 while True:
 
     try:
