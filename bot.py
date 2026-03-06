@@ -25,6 +25,7 @@ if not IQ_EMAIL or not IQ_PASSWORD:
 
 bot = telebot.TeleBot(TOKEN)
 
+# Evita conflicto con webhook
 try:
     bot.remove_webhook()
 except:
@@ -33,7 +34,7 @@ except:
 time.sleep(2)
 
 # =====================================
-# CONEXIÓN IQ OPTION
+# CONECTAR IQ OPTION
 # =====================================
 
 conector = ConectorIQ(IQ_EMAIL, IQ_PASSWORD)
@@ -52,7 +53,7 @@ def conectar_iq():
 
     except Exception as e:
 
-        print("Error:", e)
+        print("Error conectando:", e)
 
 conectar_iq()
 
@@ -65,12 +66,10 @@ CHAT_ID = None
 ULTIMA_SEÑAL = {}
 
 # =====================================
-# PARES OTC
+# PARES OTC ESTABLES
 # =====================================
 
 PARES_OTC = {
-
-"PARES_OTC = {
 
 "EURUSDOTC": "EURUSD-OTC",
 "GBPUSDOTC": "GBPUSD-OTC",
@@ -79,93 +78,93 @@ PARES_OTC = {
 "EURJPYOTC": "EURJPY-OTC"
 
 }
-}
 
 # =====================================
-# COMANDO COMENZAR
+# COMANDO /comenzar
 # =====================================
 
 @bot.message_handler(commands=['comenzar'])
-def comenzar(m):
+def comenzar(mensaje):
 
     texto = (
         "🤖 BOT OTC ACTIVO\n\n"
         "Comandos:\n"
-        "/auto → activar señales\n"
+        "/auto → activar señales automáticas\n"
         "/stop → detener señales\n\n"
         "Pares disponibles:\n"
         "EURUSDOTC\n"
         "GBPUSDOTC\n"
         "EURGBPOTC\n"
         "USDJPYOTC\n"
-        "AUDJPYOTC\n"
-        "AUDCADOTC\n"
-        "AUDNZDOTC\n"
-        "AUDCHFOTC\n"
-        "CADCHFOTC\n"
         "EURJPYOTC"
     )
 
-    bot.reply_to(m, texto)
+    bot.reply_to(mensaje, texto)
 
 # =====================================
 # ACTIVAR AUTO
 # =====================================
 
 @bot.message_handler(commands=['auto'])
-def auto(m):
+def auto(mensaje):
 
     global AUTO, CHAT_ID
 
     AUTO = True
-    CHAT_ID = m.chat.id
+    CHAT_ID = mensaje.chat.id
 
-    bot.reply_to(m, "🚀 Señales automáticas activadas")
+    bot.reply_to(mensaje, "🚀 Señales automáticas activadas")
 
 # =====================================
 # DETENER AUTO
 # =====================================
 
 @bot.message_handler(commands=['stop'])
-def stop(m):
+def stop(mensaje):
 
     global AUTO
 
     AUTO = False
 
-    bot.reply_to(m, "⛔ Señales detenidas")
+    bot.reply_to(mensaje, "⛔ Señales detenidas")
 
 # =====================================
 # ANALISIS MANUAL
 # =====================================
 
 @bot.message_handler(func=lambda m: True)
-def manual(m):
+def manual(mensaje):
 
-    texto = m.text.upper()
+    texto = mensaje.text.upper()
 
     if texto in PARES_OTC:
 
         par = PARES_OTC[texto]
 
-        resultado = analizar(conector, par)
+        try:
 
-        if resultado:
+            resultado = analizar(conector, par)
 
-            mensaje = (
-                "📊 SEÑAL OTC\n\n"
-                f"Par: {par}\n"
-                f"Hora: {resultado['hora']}\n"
-                f"Dirección: {resultado['direccion']}\n"
-                f"Probabilidad: {resultado['probabilidad']}%\n"
-                f"Expiración: {resultado['expiracion']} minutos"
-            )
+            if resultado:
 
-            bot.reply_to(m, mensaje)
+                respuesta = (
+                    "📊 SEÑAL OTC\n\n"
+                    f"Par: {par}\n"
+                    f"Hora: {resultado['hora']}\n"
+                    f"Dirección: {resultado['direccion']}\n"
+                    f"Probabilidad: {resultado['probabilidad']}%\n"
+                    f"Expiración: {resultado['expiracion']} minutos"
+                )
 
-        else:
+                bot.reply_to(mensaje, respuesta)
 
-            bot.reply_to(m, "❌ No hay señal clara")
+            else:
+
+                bot.reply_to(mensaje, "❌ No hay señal clara")
+
+        except Exception as e:
+
+            print("Error análisis manual:", e)
 
 # =====================================
 # SEÑALES AUTOMÁTICAS
@@ -223,4 +222,4 @@ threading.Thread(target=auto_signals).start()
 
 print("🚀 BOT CORRIENDO...")
 
-bot.infinity_polling()
+bot.infinity_polling() 
