@@ -32,6 +32,39 @@ def ema(data, period):
 
 
 # =====================================
+# SOPORTE Y RESISTENCIA
+# =====================================
+
+def soporte_resistencia(velas):
+
+    highs = [v['max'] for v in velas[-40:]]
+    lows = [v['min'] for v in velas[-40:]]
+
+    resistencia = max(highs)
+    soporte = min(lows)
+
+    return soporte, resistencia
+
+
+# =====================================
+# ESTRUCTURA DEL MERCADO
+# =====================================
+
+def estructura(velas):
+
+    highs = [v['max'] for v in velas[-6:]]
+    lows = [v['min'] for v in velas[-6:]]
+
+    if highs[-1] > highs[-2] and lows[-1] > lows[-2]:
+        return "alcista"
+
+    if highs[-1] < highs[-2] and lows[-1] < lows[-2]:
+        return "bajista"
+
+    return "lateral"
+
+
+# =====================================
 # FUERZA DE VELA
 # =====================================
 
@@ -62,36 +95,6 @@ def vela_impulso(v):
 
 
 # =====================================
-# SOPORTE Y RESISTENCIA
-# =====================================
-
-def soporte_resistencia(velas):
-
-    highs = [v['max'] for v in velas[-40:]]
-    lows = [v['min'] for v in velas[-40:]]
-
-    return min(lows), max(highs)
-
-
-# =====================================
-# ESTRUCTURA DEL MERCADO
-# =====================================
-
-def estructura(velas):
-
-    highs = [v['max'] for v in velas[-6:]]
-    lows = [v['min'] for v in velas[-6:]]
-
-    if highs[-1] > highs[-2] and lows[-1] > lows[-2]:
-        return "alcista"
-
-    if highs[-1] < highs[-2] and lows[-1] < lows[-2]:
-        return "bajista"
-
-    return "lateral"
-
-
-# =====================================
 # ENGULFING
 # =====================================
 
@@ -117,6 +120,7 @@ def engulfing(v1, v2):
 def pinbar_alcista(v):
 
     cuerpo = abs(v['close'] - v['open'])
+
     mecha = min(v['open'], v['close']) - v['min']
 
     return mecha > cuerpo * 2
@@ -125,6 +129,7 @@ def pinbar_alcista(v):
 def pinbar_bajista(v):
 
     cuerpo = abs(v['close'] - v['open'])
+
     mecha = v['max'] - max(v['open'], v['close'])
 
     return mecha > cuerpo * 2
@@ -134,9 +139,9 @@ def pinbar_bajista(v):
 # CONFIRMACION MULTI TIMEFRAME
 # =====================================
 
-def confirmacion_tf(conector, par, tf):
+def confirmacion_tf(conector, par, timeframe):
 
-    velas = conector.api.get_candles(par, tf, 50, time.time())
+    velas = conector.api.get_candles(par, timeframe, 50, time.time())
 
     cierres = [v['close'] for v in velas]
 
@@ -201,7 +206,7 @@ def esperar_cierre():
 
 
 # =====================================
-# ANALIZAR
+# ANALIZAR MERCADO
 # =====================================
 
 def analizar(conector, par):
@@ -239,14 +244,17 @@ def analizar(conector, par):
         confirmaciones += 1
 
 
-    # confirmación multi timeframe
+    # Confirmación marcos mayores
     tf5 = confirmacion_tf(conector, par, 300)
     tf30 = confirmacion_tf(conector, par, 1800)
 
     prob = confirmaciones * 25
 
 
+    # =====================================
     # CALL
+    # =====================================
+
     if v2['min'] <= soporte * 1.002 and estr == "alcista":
 
         if pinbar_alcista(v2) or patron == "CALL":
@@ -263,7 +271,10 @@ def analizar(conector, par):
                     }
 
 
+    # =====================================
     # PUT
+    # =====================================
+
     if v2['max'] >= resistencia * 0.998 and estr == "bajista":
 
         if pinbar_bajista(v2) or patron == "PUT":
