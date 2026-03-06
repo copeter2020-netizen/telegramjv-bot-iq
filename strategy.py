@@ -28,25 +28,18 @@ def analizar(candles):
         confirmaciones_put += 1
 
     # soporte
-    soporte = df["low"].tail(10).min()
+    soporte = df["min"].tail(10).min()
 
     if abs(ultima["close"] - soporte) < 0.0003:
         confirmaciones_call += 1
 
     # resistencia
-    resistencia = df["high"].tail(10).max()
+    resistencia = df["max"].tail(10).max()
 
     if abs(ultima["close"] - resistencia) < 0.0003:
         confirmaciones_put += 1
 
-    # cambio de tendencia
-    if df["close"].iloc[-3] < df["close"].iloc[-2] < df["close"].iloc[-1]:
-        confirmaciones_call += 1
-
-    if df["close"].iloc[-3] > df["close"].iloc[-2] > df["close"].iloc[-1]:
-        confirmaciones_put += 1
-
-    # decisión final
+    # decisión
 
     if confirmaciones_call >= 3:
         return "CALL", 4, confirmaciones_call
