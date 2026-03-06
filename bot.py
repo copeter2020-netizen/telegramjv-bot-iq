@@ -210,7 +210,7 @@ def auto_signals():
                     print("⚠️ Error analizando", par, e)
 
         # Analiza cada 30 segundos (más estable)
-        time.sleep(30)
+        time.sleep(60)
 
 # =====================================
 # INICIAR BOT
