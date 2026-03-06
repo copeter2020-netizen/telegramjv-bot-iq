@@ -12,7 +12,7 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = telebot.TeleBot(TOKEN)
 
-# Evita conflicto 409
+# evita error 409
 try:
     bot.delete_webhook()
 except:
@@ -20,21 +20,18 @@ except:
 
 print("Iniciando bot...")
 
-# conectar IQ Option
 iq = ConectorIQ()
 iq.conectar()
 
-# PARES OTC A ANALIZAR
+# PARES OTC
 pares = [
 "EURUSD-OTC",
 "GBPUSD-OTC",
-"AUDCAD-OTC",
-"AUDJPY-OTC"
+"AUDCAD-OTC"
 ]
 
 print("Pares configurados:", pares)
 
-# -------------------------------------
 
 def enviar_senal(par, direccion, tiempo, confirmaciones):
 
@@ -52,7 +49,6 @@ Confirmaciones: {confirmaciones}
 
     bot.send_message(CHAT_ID, mensaje)
 
-# -------------------------------------
 
 def enviar_resultado(par, direccion, open_price, close_price):
 
@@ -75,7 +71,6 @@ Resultado: {resultado}
 
     bot.send_message(CHAT_ID, mensaje)
 
-# -------------------------------------
 
 def esperar_cierre_vela():
 
@@ -87,7 +82,6 @@ def esperar_cierre_vela():
 
     time.sleep(esperar)
 
-# -------------------------------------
 
 def analizar_mercado():
 
@@ -116,7 +110,6 @@ def analizar_mercado():
 
                 enviar_senal(par, decision, tiempo, conf)
 
-                # esperar expiración
                 time.sleep(tiempo * 60)
 
                 velas_resultado = iq.velas(par)
@@ -134,30 +127,25 @@ def analizar_mercado():
 
                 print("Error analizando", par, ":", e)
 
-# -------------------------------------
 
 @bot.message_handler(commands=['start'])
 def start(msg):
 
-    bot.reply_to(msg, "🤖 Bot de señales iniciado")
+    bot.reply_to(msg, "🤖 Bot iniciado correctamente")
 
-# -------------------------------------
 
-# hilo de análisis
+# hilo análisis
 hilo = threading.Thread(target=analizar_mercado)
 hilo.daemon = True
 hilo.start()
 
-# -------------------------------------
 
-# polling seguro
 while True:
 
     try:
-
         bot.infinity_polling(timeout=60, long_polling_timeout=60)
 
     except Exception as e:
 
         print("Error polling:", e)
-        time.sleep(10) 
+        time.sleep(10)
