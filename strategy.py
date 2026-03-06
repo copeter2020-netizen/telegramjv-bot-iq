@@ -1,50 +1,47 @@
-import pandas as pd
-from indicators import calcular_rsi, calcular_ema
+import numpy as np
 
-def analizar(candles):
+def calcular_rsi(cierres, periodo=14):
 
-    df = pd.DataFrame(candles)
+    cierres = np.array(cierres)
 
-    df["ema"] = calcular_ema(df)
-    df["rsi"] = calcular_rsi(df)
+    delta = np.diff(cierres)
 
-    confirmaciones_call = 0
-    confirmaciones_put = 0
+    subida = delta.clip(min=0)
+    bajada = -1 * delta.clip(max=0)
 
-    ultima = df.iloc[-1]
+    media_subida = subida[-periodo:].mean()
+    media_bajada = bajada[-periodo:].mean()
 
-    # tendencia EMA
-    if ultima["close"] > ultima["ema"]:
-        confirmaciones_call += 1
+    if media_bajada == 0:
+        return 100
 
-    if ultima["close"] < ultima["ema"]:
-        confirmaciones_put += 1
+    rs = media_subida / media_bajada
 
-    # RSI
-    if ultima["rsi"] < 30:
-        confirmaciones_call += 1
+    rsi = 100 - (100 / (1 + rs))
 
-    if ultima["rsi"] > 70:
-        confirmaciones_put += 1
+    return rsi
 
-    # soporte
-    soporte = df["min"].tail(10).min()
 
-    if abs(ultima["close"] - soporte) < 0.0003:
-        confirmaciones_call += 1
+def analizar(conector, par):
 
-    # resistencia
-    resistencia = df["max"].tail(10).max()
+    velas = conector.api.get_candles(par, 60, 30, time.time())
 
-    if abs(ultima["close"] - resistencia) < 0.0003:
-        confirmaciones_put += 1
+    cierres = [v['close'] for v in velas]
 
-    # decisión
+    rsi = calcular_rsi(cierres)
 
-    if confirmaciones_call >= 3:
-        return "CALL", 4, confirmaciones_call
+    ultima = velas[-1]
+    anterior = velas[-2]
 
-    if confirmaciones_put >= 3:
-        return "PUT", 4, confirmaciones_put
+    # tendencia
+    tendencia = np.mean(cierres[-5:]) - np.mean(cierres[-15:-5])
 
-    return None, None, 0
+    # señal CALL
+    if rsi < 30 and ultima['close'] > ultima['open'] and tendencia > 0:
+        return "📈 CALL"
+
+    # señal PUT
+    if rsi > 70 and ultima['close'] < ultima['open'] and tendencia < 0:
+        return "📉 PUT"
+
+    return None 
