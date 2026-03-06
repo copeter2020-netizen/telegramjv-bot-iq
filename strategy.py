@@ -1,75 +1,170 @@
-import pandas as pd
-import ta
+import time
+import numpy as np
 
-def analizar(velas):
+# =====================================
+# EMA
+# =====================================
 
-    if not velas or len(velas) < 100:
-        return "⚠ Datos insuficientes para analizar"
+def ema(data, period):
 
-    df = pd.DataFrame(velas)
+    data = np.array(data)
 
-    if "close" not in df.columns:
-        return "⚠ Datos inválidos"
+    weights = np.exp(np.linspace(-1., 0., period))
+    weights /= weights.sum()
 
-    # =========================
-    # INDICADORES
-    # =========================
+    a = np.convolve(data, weights, mode='full')[:len(data)]
 
-    df["ema20"] = ta.trend.ema_indicator(df["close"], window=20)
-    df["ema50"] = ta.trend.ema_indicator(df["close"], window=50)
-    df["rsi"] = ta.momentum.rsi(df["close"], window=14)
+    a[:period] = a[period]
 
-    macd = ta.trend.MACD(df["close"])
-    df["macd"] = macd.macd()
-    df["macd_signal"] = macd.macd_signal()
+    return a
 
-    df = df.dropna()
 
-    if df.empty:
-        return "⚠ Esperando confirmación del mercado"
+# =====================================
+# RSI
+# =====================================
 
-    last = df.iloc[-1]
-    prev = df.iloc[-2]
+def calcular_rsi(cierres, periodo=14):
 
-    # =========================
-    # FILTRO DE MERCADO LATERAL
-    # =========================
+    cierres = np.array(cierres)
 
-    if abs(last["ema20"] - last["ema50"]) < 0.00005:
-        return "🟡 Mercado lateral — No operar"
+    delta = np.diff(cierres)
 
-    # =========================
-    # SEÑAL CALL
-    # =========================
+    subida = delta.clip(min=0)
+    bajada = -delta.clip(max=0)
 
-    if (
-        last["ema20"] > last["ema50"]
-        and last["rsi"] > 55
-        and last["macd"] > last["macd_signal"]
-        and prev["macd"] <= prev["macd_signal"]
-    ):
-        return (
-            "🟢 COMPRA (CALL)\n"
-            "⏳ Expira en 5 minutos\n"
-            "📈 Tendencia alcista confirmada\n"
-            "📊 EMA20 > EMA50 + RSI fuerte + Cruce MACD"
-        )
+    media_subida = subida[-periodo:].mean()
+    media_bajada = bajada[-periodo:].mean()
 
-    # =========================
-    # SEÑAL PUT
-    # =========================
+    if media_bajada == 0:
+        return 100
 
-    if (
-        last["ema20"] < last["ema50"]
-        and last["rsi"] < 45
-        and last["macd"] < last["macd_signal"]
-        and prev["macd"] >= prev["macd_signal"]
-    ):
-        return (
-            "🔴 VENTA (PUT)\n"
-            "⏳ Expira en 5 minutos\n"
-            "📉 Tendencia bajista confirmada\n"
-            "📊 EMA20 < EMA50 + RSI débil + Cruce MACD"
-        )
+    rs = media_subida / media_bajada
 
-    return "🟡 Esperando mejor confirmación del mercado"
+    rsi = 100 - (100 / (1 + rs))
+
+    return rsi
+
+
+# =====================================
+# FILTRO MERCADO LATERAL
+# =====================================
+
+def mercado_lateral(cierres):
+
+    volatilidad = np.std(cierres[-20:])
+
+    if volatilidad < 0.00005:
+        return True
+
+    return False
+
+
+# =====================================
+# FILTRO MANIPULACION OTC
+# =====================================
+
+def manipulacion_otc(velas):
+
+    rangos = [v['max'] - v['min'] for v in velas[-10:]]
+
+    media = np.mean(rangos)
+
+    ultima = velas[-1]['max'] - velas[-1]['min']
+
+    if ultima > media * 3:
+        return True
+
+    return False
+
+
+# =====================================
+# DETECTAR ROMPIMIENTO
+# =====================================
+
+def breakout(velas):
+
+    maximos = [v['max'] for v in velas[-20:]]
+    minimos = [v['min'] for v in velas[-20:]]
+
+    resistencia = max(maximos[:-1])
+    soporte = min(minimos[:-1])
+
+    ultima = velas[-1]
+
+    if ultima['close'] > resistencia:
+        return "CALL"
+
+    if ultima['close'] < soporte:
+        return "PUT"
+
+    return None
+
+
+# =====================================
+# CALCULAR PROBABILIDAD
+# =====================================
+
+def probabilidad(tendencia, rompimiento, rsi):
+
+    score = 0
+
+    if tendencia:
+        score += 40
+
+    if rompimiento:
+        score += 40
+
+    if rsi < 40 or rsi > 60:
+        score += 20
+
+    return score
+
+
+# =====================================
+# ANALIZAR MERCADO
+# =====================================
+
+def analizar(conector, par):
+
+    velas = conector.api.get_candles(par, 60, 120, time.time())
+
+    cierres = [v['close'] for v in velas]
+
+    # FILTRO MANIPULACION
+    if manipulacion_otc(velas):
+        return None
+
+    # FILTRO LATERAL
+    if mercado_lateral(cierres):
+        return None
+
+    # RSI
+    rsi = calcular_rsi(cierres)
+
+    # TENDENCIA
+    ema50 = ema(cierres, 50)
+    ema100 = ema(cierres, 80)
+
+    tendencia_alcista = ema50[-1] > ema100[-1]
+    tendencia_bajista = ema50[-1] < ema100[-1]
+
+    # ROMPIMIENTO
+    romp = breakout(velas)
+
+    # CALL
+    if romp == "CALL" and tendencia_alcista:
+
+        prob = probabilidad(True, True, rsi)
+
+        if prob >= 60:
+            return f"CALL\nProbabilidad: {prob}%"
+
+    # PUT
+    if romp == "PUT" and tendencia_bajista:
+
+        prob = probabilidad(True, True, rsi)
+
+        if prob >= 60:
+            return f"PUT\nProbabilidad: {prob}%"
+
+    return None 
