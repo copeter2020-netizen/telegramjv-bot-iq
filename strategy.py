@@ -47,6 +47,21 @@ def fuerza_vela(v):
 
 
 # =====================================
+# VELA IMPULSO
+# =====================================
+
+def vela_impulso(v):
+
+    cuerpo = abs(v['close'] - v['open'])
+    rango = v['max'] - v['min']
+
+    if rango == 0:
+        return False
+
+    return cuerpo / rango > 0.7
+
+
+# =====================================
 # SOPORTE Y RESISTENCIA
 # =====================================
 
@@ -116,7 +131,7 @@ def pinbar_bajista(v):
 
 
 # =====================================
-# CONFIRMACION MARCO MAYOR
+# CONFIRMACION MULTI TIMEFRAME
 # =====================================
 
 def confirmacion_tf(conector, par, tf):
@@ -214,6 +229,9 @@ def analizar(conector, par):
     if fuerza_vela(v2):
         confirmaciones += 1
 
+    if vela_impulso(v2):
+        confirmaciones += 1
+
     if volumen_fuerte(velas):
         confirmaciones += 1
 
@@ -225,7 +243,7 @@ def analizar(conector, par):
     tf5 = confirmacion_tf(conector, par, 300)
     tf30 = confirmacion_tf(conector, par, 1800)
 
-    prob = confirmaciones * 20
+    prob = confirmaciones * 25
 
 
     # CALL
@@ -235,7 +253,7 @@ def analizar(conector, par):
 
             if tf5 == "CALL" and tf30 == "CALL":
 
-                if prob >= 80:
+                if prob >= 70:
 
                     return {
                         "direccion": "CALL",
@@ -252,7 +270,7 @@ def analizar(conector, par):
 
             if tf5 == "PUT" and tf30 == "PUT":
 
-                if prob >= 80:
+                if prob >= 70:
 
                     return {
                         "direccion": "PUT",
