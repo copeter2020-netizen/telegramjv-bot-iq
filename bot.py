@@ -25,6 +25,7 @@ if not IQ_EMAIL or not IQ_PASSWORD:
 
 bot = telebot.TeleBot(TOKEN)
 
+# Evita conflicto con webhook
 try:
     bot.remove_webhook()
 except:
@@ -33,7 +34,7 @@ except:
 time.sleep(2)
 
 # =====================================
-# CONECTAR A IQ OPTION
+# CONECTAR IQ OPTION
 # =====================================
 
 conector = ConectorIQ(IQ_EMAIL, IQ_PASSWORD)
@@ -48,7 +49,7 @@ def conectar_iq():
 
         else:
 
-            print("❌ Error de conexión IQ")
+            print("❌ Error conexión IQ")
 
     except Exception as e:
 
@@ -57,7 +58,7 @@ def conectar_iq():
 conectar_iq()
 
 # =====================================
-# VARIABLES GLOBALES
+# VARIABLES
 # =====================================
 
 AUTO = False
@@ -74,8 +75,7 @@ PARES_OTC = {
 "GBPUSDOTC": "GBPUSD-OTC",
 "EURGBPOTC": "EURGBP-OTC",
 "USDJPYOTC": "USDJPY-OTC",
-"EURJPYOTC": "EURJPY-OTC",
-"GBPJPYOTC": "GBPJPY-OTC"
+"EURJPYOTC": "EURJPY-OTC"
 
 }
 
@@ -88,22 +88,21 @@ def comenzar(mensaje):
 
     texto = (
         "🤖 BOT OTC ACTIVO\n\n"
-        "Comandos disponibles:\n"
+        "Comandos:\n"
         "/auto → activar señales automáticas\n"
         "/stop → detener señales\n\n"
-        "También puedes escribir un par:\n"
+        "Pares disponibles:\n"
         "EURUSDOTC\n"
         "GBPUSDOTC\n"
         "EURGBPOTC\n"
         "USDJPYOTC\n"
-        "EURJPYOTC\n"
-        "GBPJPYOTC"
+        "EURJPYOTC"
     )
 
     bot.reply_to(mensaje, texto)
 
 # =====================================
-# ACTIVAR AUTOMÁTICO
+# ACTIVAR AUTO
 # =====================================
 
 @bot.message_handler(commands=['auto'])
@@ -117,7 +116,7 @@ def auto(mensaje):
     bot.reply_to(mensaje, "🚀 Señales automáticas activadas")
 
 # =====================================
-# DETENER AUTOMÁTICO
+# DETENER AUTO
 # =====================================
 
 @bot.message_handler(commands=['stop'])
@@ -130,7 +129,7 @@ def stop(mensaje):
     bot.reply_to(mensaje, "⛔ Señales detenidas")
 
 # =====================================
-# MENSAJE MANUAL
+# ANALISIS MANUAL
 # =====================================
 
 @bot.message_handler(func=lambda m: True)
@@ -142,24 +141,30 @@ def manual(mensaje):
 
         par = PARES_OTC[texto]
 
-        resultado = analizar(conector, par)
+        try:
 
-        if resultado:
+            resultado = analizar(conector, par)
 
-            mensaje_respuesta = (
-                "📊 SEÑAL OTC\n\n"
-                f"Par: {par}\n"
-                f"Hora: {resultado['hora']}\n"
-                f"Dirección: {resultado['direccion']}\n"
-                f"Probabilidad: {resultado['probabilidad']}%\n"
-                f"Expiración: {resultado['expiracion']} minutos"
-            )
+            if resultado:
 
-            bot.reply_to(mensaje, mensaje_respuesta)
+                respuesta = (
+                    "📊 SEÑAL OTC\n\n"
+                    f"Par: {par}\n"
+                    f"Hora: {resultado['hora']}\n"
+                    f"Dirección: {resultado['direccion']}\n"
+                    f"Probabilidad: {resultado['probabilidad']}%\n"
+                    f"Expiración: {resultado['expiracion']} minutos"
+                )
 
-        else:
+                bot.reply_to(mensaje, respuesta)
 
-            bot.reply_to(mensaje, "❌ No hay señal clara")
+            else:
+
+                bot.reply_to(mensaje, "❌ No hay señal clara")
+
+        except Exception as e:
+
+            print("Error análisis manual:", e)
 
 # =====================================
 # SEÑALES AUTOMÁTICAS
@@ -217,4 +222,4 @@ threading.Thread(target=auto_signals).start()
 
 print("🚀 BOT CORRIENDO...")
 
-bot.infinity_polling()
+bot.infinity_polling() 
