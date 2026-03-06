@@ -3,6 +3,17 @@ import numpy as np
 
 
 # =====================================
+# HORA DE ENTRADA
+# =====================================
+
+def hora_entrada():
+
+    ahora = time.localtime()
+
+    return f"{ahora.tm_hour:02d}:{ahora.tm_min:02d}"
+
+
+# =====================================
 # EMA
 # =====================================
 
@@ -39,7 +50,7 @@ def vwap(velas):
 
     precios = [(v['close'] + v['max'] + v['min']) / 3 for v in velas]
 
-    volumen = [v['volume'] if 'volume' in v else 1 for v in velas]
+    volumen = [v.get("volume", 1) for v in velas]
 
     pv = np.sum(np.array(precios) * np.array(volumen))
 
@@ -57,7 +68,10 @@ def soporte_resistencia(velas):
     highs = [v['max'] for v in velas[-40:]]
     lows = [v['min'] for v in velas[-40:]]
 
-    return min(lows), max(highs)
+    resistencia = max(highs)
+    soporte = min(lows)
+
+    return soporte, resistencia
 
 
 # =====================================
@@ -207,7 +221,6 @@ def analizar(conector, par):
     confirmaciones = 0
 
 
-    # Patrones
     patron = engulfing(v1, v2)
 
     if patron:
@@ -216,23 +229,15 @@ def analizar(conector, par):
     if inside_bar(v1, v2):
         confirmaciones += 1
 
-
-    # Fuerza
     if fuerza_vela(v2):
         confirmaciones += 1
 
-
-    # Tendencia EMA
     if v2['close'] > ema20[-1]:
         confirmaciones += 1
 
-
-    # VWAP
     if v2['close'] > vwap_val:
         confirmaciones += 1
 
-
-    # ATR fuerza
     if (v2['max'] - v2['min']) > atr_val:
         confirmaciones += 1
 
@@ -240,7 +245,10 @@ def analizar(conector, par):
     prob = confirmaciones * 15
 
 
+    # ======================
     # CALL
+    # ======================
+
     if v2['min'] <= soporte * 1.002 and estr == "alcista":
 
         if pinbar_alcista(v2) or patron == "CALL":
@@ -250,11 +258,15 @@ def analizar(conector, par):
                 return {
                     "direccion": "CALL",
                     "probabilidad": prob,
-                    "expiracion": exp
+                    "expiracion": exp,
+                    "hora": hora_entrada()
                 }
 
 
+    # ======================
     # PUT
+    # ======================
+
     if v2['max'] >= resistencia * 0.998 and estr == "bajista":
 
         if pinbar_bajista(v2) or patron == "PUT":
@@ -264,7 +276,8 @@ def analizar(conector, par):
                 return {
                     "direccion": "PUT",
                     "probabilidad": prob,
-                    "expiracion": exp
+                    "expiracion": exp,
+                    "hora": hora_entrada()
                 }
 
 
