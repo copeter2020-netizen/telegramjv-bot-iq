@@ -3,87 +3,71 @@ import numpy as np
 
 
 # =====================================
-# DETECTAR SOPORTE Y RESISTENCIA
+# EMA
+# =====================================
+
+def ema(data, period):
+
+    data = np.array(data)
+
+    weights = np.exp(np.linspace(-1., 0., period))
+    weights /= weights.sum()
+
+    a = np.convolve(data, weights, mode='full')[:len(data)]
+
+    a[:period] = a[period]
+
+    return a
+
+
+# =====================================
+# ATR
+# =====================================
+
+def atr(velas):
+
+    rangos = [v['max'] - v['min'] for v in velas[-14:]]
+
+    return np.mean(rangos)
+
+
+# =====================================
+# VWAP
+# =====================================
+
+def vwap(velas):
+
+    precios = [(v['close'] + v['max'] + v['min']) / 3 for v in velas]
+
+    volumen = [v['volume'] if 'volume' in v else 1 for v in velas]
+
+    pv = np.sum(np.array(precios) * np.array(volumen))
+
+    vol = np.sum(volumen)
+
+    return pv / vol
+
+
+# =====================================
+# SOPORTE Y RESISTENCIA
 # =====================================
 
 def soporte_resistencia(velas):
 
-    maximos = [v['max'] for v in velas[-30:]]
-    minimos = [v['min'] for v in velas[-30:]]
+    highs = [v['max'] for v in velas[-40:]]
+    lows = [v['min'] for v in velas[-40:]]
 
-    resistencia = max(maximos)
-    soporte = min(minimos)
-
-    return soporte, resistencia
-
-
-# =====================================
-# FUERZA DE VELA
-# =====================================
-
-def vela_fuerte(vela):
-
-    cuerpo = abs(vela['close'] - vela['open'])
-    rango = vela['max'] - vela['min']
-
-    if rango == 0:
-        return False
-
-    fuerza = cuerpo / rango
-
-    return fuerza > 0.6
-
-
-# =====================================
-# RECHAZO DE PRECIO
-# =====================================
-
-def rechazo_soporte(vela):
-
-    cuerpo = abs(vela['close'] - vela['open'])
-
-    mecha_inferior = min(vela['open'], vela['close']) - vela['min']
-
-    return mecha_inferior > cuerpo
-
-
-def rechazo_resistencia(vela):
-
-    cuerpo = abs(vela['close'] - vela['open'])
-
-    mecha_superior = vela['max'] - max(vela['open'], vela['close'])
-
-    return mecha_superior > cuerpo
-
-
-# =====================================
-# CALCULAR PROBABILIDAD
-# =====================================
-
-def calcular_probabilidad(fuerza, rechazo, estructura):
-
-    score = 0
-
-    if fuerza:
-        score += 40
-
-    if rechazo:
-        score += 30
-
-    if estructura:
-        score += 30
-
-    return score
+    return min(lows), max(highs)
 
 
 # =====================================
 # ESTRUCTURA DEL MERCADO
 # =====================================
 
-def estructura_mercado(velas):
+def estructura(velas):
 
-    highs = [v['max'] for v in velas[-10:]]
-    lows = [v['min'] for v in velas[-10:]]
+    highs = [v['max'] for v in velas[-6:]]
+    lows = [v['min'] for v in velas[-6:]]
 
     if highs[-1] > highs[-2] and lows[-1] > lows[-2]:
         return "alcista"
@@ -95,80 +79,193 @@ def estructura_mercado(velas):
 
 
 # =====================================
-# CALCULAR EXPIRACION
+# FUERZA DE VELA
 # =====================================
 
-def calcular_expiracion(velas):
+def fuerza_vela(vela):
+
+    cuerpo = abs(vela['close'] - vela['open'])
+    rango = vela['max'] - vela['min']
+
+    if rango == 0:
+        return False
+
+    return cuerpo / rango > 0.6
+
+
+# =====================================
+# PIN BAR
+# =====================================
+
+def pinbar_alcista(v):
+
+    cuerpo = abs(v['close'] - v['open'])
+
+    mecha = min(v['open'], v['close']) - v['min']
+
+    return mecha > cuerpo * 2
+
+
+def pinbar_bajista(v):
+
+    cuerpo = abs(v['close'] - v['open'])
+
+    mecha = v['max'] - max(v['open'], v['close'])
+
+    return mecha > cuerpo * 2
+
+
+# =====================================
+# ENGULFING
+# =====================================
+
+def engulfing(v1, v2):
+
+    if v1['close'] < v1['open'] and v2['close'] > v2['open']:
+
+        if v2['close'] > v1['open'] and v2['open'] < v1['close']:
+            return "CALL"
+
+    if v1['close'] > v1['open'] and v2['close'] < v2['open']:
+
+        if v2['open'] > v1['close'] and v2['close'] < v1['open']:
+            return "PUT"
+
+    return None
+
+
+# =====================================
+# INSIDE BAR
+# =====================================
+
+def inside_bar(v1, v2):
+
+    return v2['max'] < v1['max'] and v2['min'] > v1['min']
+
+
+# =====================================
+# EXPIRACION
+# =====================================
+
+def expiracion(velas):
 
     rango = velas[-1]['max'] - velas[-1]['min']
 
     promedio = np.mean([v['max'] - v['min'] for v in velas[-10:]])
 
     if rango > promedio * 2:
-        return "1 minuto"
+        return 1
+
+    if rango > promedio * 1.5:
+        return 2
 
     if rango > promedio:
-        return "3 minutos"
+        return 3
 
-    return "5 minutos"
+    return 4
 
 
 # =====================================
-# ANALIZAR MERCADO
+# ESPERAR CIERRE DE VELA
+# =====================================
+
+def esperar_cierre():
+
+    while True:
+
+        if int(time.time()) % 60 >= 59:
+            break
+
+        time.sleep(0.5)
+
+
+# =====================================
+# ANALIZAR
 # =====================================
 
 def analizar(conector, par):
 
-    velas = conector.api.get_candles(par, 60, 60, time.time())
+    esperar_cierre()
+
+    velas = conector.api.get_candles(par, 60, 100, time.time())
+
+    v1 = velas[-2]
+    v2 = velas[-1]
 
     soporte, resistencia = soporte_resistencia(velas)
 
-    vela_actual = velas[-1]
+    estr = estructura(velas)
 
-    estructura = estructura_mercado(velas)
+    ema20 = ema([v['close'] for v in velas], 20)
 
-    expiracion = calcular_expiracion(velas)
+    atr_val = atr(velas)
 
-    fuerza = vela_fuerte(vela_actual)
+    vwap_val = vwap(velas)
 
-    # ===============================
+    exp = expiracion(velas)
+
+    confirmaciones = 0
+
+
+    # Patrones
+    patron = engulfing(v1, v2)
+
+    if patron:
+        confirmaciones += 1
+
+    if inside_bar(v1, v2):
+        confirmaciones += 1
+
+
+    # Fuerza
+    if fuerza_vela(v2):
+        confirmaciones += 1
+
+
+    # Tendencia EMA
+    if v2['close'] > ema20[-1]:
+        confirmaciones += 1
+
+
+    # VWAP
+    if v2['close'] > vwap_val:
+        confirmaciones += 1
+
+
+    # ATR fuerza
+    if (v2['max'] - v2['min']) > atr_val:
+        confirmaciones += 1
+
+
+    prob = confirmaciones * 15
+
+
     # CALL
-    # ===============================
+    if v2['min'] <= soporte * 1.002 and estr == "alcista":
 
-    cerca_soporte = vela_actual['min'] <= soporte * 1.002
+        if pinbar_alcista(v2) or patron == "CALL":
 
-    rechazo = rechazo_soporte(vela_actual)
+            if prob >= 60:
 
-    if cerca_soporte and rechazo and estructura == "alcista":
+                return {
+                    "direccion": "CALL",
+                    "probabilidad": prob,
+                    "expiracion": exp
+                }
 
-        prob = calcular_probabilidad(fuerza, rechazo, True)
 
-        if prob >= 60:
-
-            return {
-                "direccion": "CALL",
-                "probabilidad": prob,
-                "expiracion": expiracion
-            }
-
-    # ===============================
     # PUT
-    # ===============================
+    if v2['max'] >= resistencia * 0.998 and estr == "bajista":
 
-    cerca_resistencia = vela_actual['max'] >= resistencia * 0.998
+        if pinbar_bajista(v2) or patron == "PUT":
 
-    rechazo = rechazo_resistencia(vela_actual)
+            if prob >= 60:
 
-    if cerca_resistencia and rechazo and estructura == "bajista":
+                return {
+                    "direccion": "PUT",
+                    "probabilidad": prob,
+                    "expiracion": exp
+                }
 
-        prob = calcular_probabilidad(fuerza, rechazo, True)
-
-        if prob >= 60:
-
-            return {
-                "direccion": "PUT",
-                "probabilidad": prob,
-                "expiracion": expiracion
-            }
 
     return None
