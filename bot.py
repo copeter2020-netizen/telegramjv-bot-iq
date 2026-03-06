@@ -12,19 +12,21 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = telebot.TeleBot(TOKEN)
 
-# evitar conflicto 409
+# evita error 409
 bot.delete_webhook()
 
 print("Iniciando bot...")
 
+# conectar a IQ Option
 iq = ConectorIQ()
 iq.conectar()
 
+# PARES QUE ANALIZA EL BOT
 pares = [
 "EURUSD-OTC",
 "GBPUSD-OTC",
 "AUDCAD-OTC",
-"AUDUSD-OTC"
+"AUDJPY-OTC"
 ]
 
 print("Pares configurados:", pares)
@@ -82,7 +84,6 @@ def esperar_cierre_vela():
     time.sleep(esperar)
 
 
-# ESTA ES LA FUNCIÓN ANALIZAR MERCADO
 def analizar_mercado():
 
     while True:
@@ -110,6 +111,7 @@ def analizar_mercado():
 
                 enviar_senal(par, decision, tiempo, conf)
 
+                # esperar expiración
                 time.sleep(tiempo * 60)
 
                 velas_resultado = iq.velas(par)
@@ -134,7 +136,7 @@ def start(msg):
     bot.reply_to(msg, "🤖 Bot de señales iniciado")
 
 
-# hilo que ejecuta el análisis
+# hilo de análisis
 hilo = threading.Thread(target=analizar_mercado)
 
 hilo.daemon = True
@@ -142,7 +144,7 @@ hilo.daemon = True
 hilo.start()
 
 
-# polling seguro de telegram
+# polling estable
 while True:
 
     try:
@@ -153,4 +155,4 @@ while True:
 
         print("Error polling:", e)
 
-        time.sleep(10) 
+        time.sleep(10)
