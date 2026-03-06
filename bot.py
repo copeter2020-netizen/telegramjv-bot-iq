@@ -6,7 +6,7 @@ from iq_connector import ConectorIQ
 from strategy import analizar
 
 # =====================================
-# VARIABLES DE ENTORNO
+# VARIABLES
 # =====================================
 
 TOKEN = os.getenv("TOKEN")
@@ -16,182 +16,126 @@ IQ_PASSWORD = os.getenv("IQ_PASSWORD")
 if not TOKEN:
     raise ValueError("TOKEN no configurado")
 
-if not IQ_EMAIL or not IQ_PASSWORD:
-    raise ValueError("Credenciales IQ no configuradas")
-
-# =====================================
-# INICIALIZAR BOT
-# =====================================
-
 bot = telebot.TeleBot(TOKEN)
 
-# Evita conflicto con webhook
-try:
-    bot.remove_webhook()
-except:
-    pass
+conector = ConectorIQ(IQ_EMAIL, IQ_PASSWORD)
 
-time.sleep(2)
+AUTO = False
+CHAT_ID = None
+ULTIMA_OPERACION = 0
 
 # =====================================
 # CONECTAR IQ OPTION
 # =====================================
 
-conector = ConectorIQ(IQ_EMAIL, IQ_PASSWORD)
-
 def conectar_iq():
 
-    try:
-
-        if conector.conectar():
-
-            print("✅ Conectado a IQ Option")
-
-        else:
-
-            print("❌ Error conexión IQ")
-
-    except Exception as e:
-
-        print("Error conectando:", e)
+    if conector.conectar():
+        print("✅ Conectado a IQ Option")
+    else:
+        print("❌ Error conexión IQ")
 
 conectar_iq()
 
 # =====================================
-# VARIABLES
+# OBTENER PARES DISPONIBLES
 # =====================================
 
-AUTO = False
-CHAT_ID = None
-ULTIMA_SEÑAL = {}
+def obtener_pares():
+
+    try:
+
+        activos = conector.api.get_all_open_time()
+
+        pares = []
+
+        for tipo in activos:
+
+            for par in activos[tipo]:
+
+                if activos[tipo][par]["open"]:
+                    pares.append(par)
+
+        print("📊 Pares activos:", pares)
+
+        return pares
+
+    except Exception as e:
+
+        print("Error obteniendo pares:", e)
+
+        return []
 
 # =====================================
-# PARES OTC ESTABLES
-# =====================================
-
-PARES_OTC = {
-
-"EURUSDOTC": "EURUSD-OTC",
-"GBPUSDOTC": "GBPUSD-OTC",
-"EURGBPOTC": "EURGBP-OTC",
-"USDJPYOTC": "USDJPY-OTC",
-"EURJPYOTC": "EURJPY-OTC"
-
-}
-
-# =====================================
-# COMANDO /comenzar
+# COMANDO COMENZAR
 # =====================================
 
 @bot.message_handler(commands=['comenzar'])
-def comenzar(mensaje):
+def comenzar(m):
 
     texto = (
         "🤖 BOT OTC ACTIVO\n\n"
-        "Comandos:\n"
-        "/auto → activar señales automáticas\n"
+        "/auto → activar señales\n"
         "/stop → detener señales\n\n"
-        "Pares disponibles:\n"
-        "EURUSDOTC\n"
-        "GBPUSDOTC\n"
-        "EURGBPOTC\n"
-        "USDJPYOTC\n"
-        "EURJPYOTC"
+        "El bot analizará todos los pares disponibles."
     )
 
-    bot.reply_to(mensaje, texto)
+    bot.reply_to(m, texto)
 
 # =====================================
-# ACTIVAR AUTO
+# AUTO
 # =====================================
 
 @bot.message_handler(commands=['auto'])
-def auto(mensaje):
+def auto(m):
 
     global AUTO, CHAT_ID
 
     AUTO = True
-    CHAT_ID = mensaje.chat.id
+    CHAT_ID = m.chat.id
 
-    bot.reply_to(mensaje, "🚀 Señales automáticas activadas")
+    bot.reply_to(m, "🚀 Señales automáticas activadas")
 
 # =====================================
-# DETENER AUTO
+# STOP
 # =====================================
 
 @bot.message_handler(commands=['stop'])
-def stop(mensaje):
+def stop(m):
 
     global AUTO
 
     AUTO = False
 
-    bot.reply_to(mensaje, "⛔ Señales detenidas")
+    bot.reply_to(m, "⛔ Señales detenidas")
 
 # =====================================
-# ANALISIS MANUAL
-# =====================================
-
-@bot.message_handler(func=lambda m: True)
-def manual(mensaje):
-
-    texto = mensaje.text.upper()
-
-    if texto in PARES_OTC:
-
-        par = PARES_OTC[texto]
-
-        try:
-
-            resultado = analizar(conector, par)
-
-            if resultado:
-
-                respuesta = (
-                    "📊 SEÑAL OTC\n\n"
-                    f"Par: {par}\n"
-                    f"Hora: {resultado['hora']}\n"
-                    f"Dirección: {resultado['direccion']}\n"
-                    f"Probabilidad: {resultado['probabilidad']}%\n"
-                    f"Expiración: {resultado['expiracion']} minutos"
-                )
-
-                bot.reply_to(mensaje, respuesta)
-
-            else:
-
-                bot.reply_to(mensaje, "❌ No hay señal clara")
-
-        except Exception as e:
-
-            print("Error análisis manual:", e)
-
-# =====================================
-# SEÑALES AUTOMÁTICAS
+# ANALISIS AUTOMATICO
 # =====================================
 
 def auto_signals():
 
     global AUTO
+    global ULTIMA_OPERACION
 
     while True:
 
         if AUTO and CHAT_ID:
 
+            pares = obtener_pares()
+
             print("🔎 Analizando mercado...")
 
-            for par in PARES_OTC.values():
+            for par in pares:
+
+                if time.time() - ULTIMA_OPERACION < 300:
+                    continue
 
                 try:
 
                     resultado = analizar(conector, par)
 
                     if resultado:
-
-                        señal = resultado["direccion"]
-
-                        if ULTIMA_SEÑAL.get(par) == señal:
-                            continue
 
                         mensaje = (
                             "🚨 SEÑAL DETECTADA\n\n"
@@ -204,7 +148,7 @@ def auto_signals():
 
                         bot.send_message(CHAT_ID, mensaje)
 
-                        ULTIMA_SEÑAL[par] = señal
+                        ULTIMA_OPERACION = time.time()
 
                         print("Señal enviada:", par)
 
@@ -212,7 +156,7 @@ def auto_signals():
 
                     print("Error analizando", par, e)
 
-        time.sleep(20)
+        time.sleep(10)
 
 # =====================================
 # INICIAR BOT
@@ -222,4 +166,4 @@ threading.Thread(target=auto_signals).start()
 
 print("🚀 BOT CORRIENDO...")
 
-bot.infinity_polling() 
+bot.infinity_polling()
