@@ -32,34 +32,6 @@ def ema(data, period):
 
 
 # =====================================
-# ATR
-# =====================================
-
-def atr(velas):
-
-    rangos = [v['max'] - v['min'] for v in velas[-14:]]
-
-    return np.mean(rangos)
-
-
-# =====================================
-# VWAP
-# =====================================
-
-def vwap(velas):
-
-    precios = [(v['close'] + v['max'] + v['min']) / 3 for v in velas]
-
-    volumen = [v.get("volume", 1) for v in velas]
-
-    pv = np.sum(np.array(precios) * np.array(volumen))
-
-    vol = np.sum(volumen)
-
-    return pv / vol
-
-
-# =====================================
 # SOPORTE Y RESISTENCIA
 # =====================================
 
@@ -68,10 +40,7 @@ def soporte_resistencia(velas):
     highs = [v['max'] for v in velas[-40:]]
     lows = [v['min'] for v in velas[-40:]]
 
-    resistencia = max(highs)
-    soporte = min(lows)
-
-    return soporte, resistencia
+    return min(lows), max(highs)
 
 
 # =====================================
@@ -108,7 +77,7 @@ def fuerza_vela(vela):
 
 
 # =====================================
-# PIN BAR
+# PINBAR
 # =====================================
 
 def pinbar_alcista(v):
@@ -149,12 +118,32 @@ def engulfing(v1, v2):
 
 
 # =====================================
-# INSIDE BAR
+# CONFIRMACION MARCO MAYOR (M30)
 # =====================================
 
-def inside_bar(v1, v2):
+def confirmacion_m30(conector, par):
 
-    return v2['max'] < v1['max'] and v2['min'] > v1['min']
+    velas = conector.api.get_candles(par, 1800, 50, time.time())
+
+    cierres = [v['close'] for v in velas]
+
+    ema20 = ema(cierres, 20)
+
+    tendencia_alcista = cierres[-1] > ema20[-1]
+    tendencia_bajista = cierres[-1] < ema20[-1]
+
+    v1 = velas[-2]
+    v2 = velas[-1]
+
+    patron = engulfing(v1, v2)
+
+    if tendencia_alcista or patron == "CALL":
+        return "CALL"
+
+    if tendencia_bajista or patron == "PUT":
+        return "PUT"
+
+    return None
 
 
 # =====================================
@@ -210,39 +199,22 @@ def analizar(conector, par):
 
     estr = estructura(velas)
 
-    ema20 = ema([v['close'] for v in velas], 20)
-
-    atr_val = atr(velas)
-
-    vwap_val = vwap(velas)
-
     exp = expiracion(velas)
 
     confirmaciones = 0
-
 
     patron = engulfing(v1, v2)
 
     if patron:
         confirmaciones += 1
 
-    if inside_bar(v1, v2):
-        confirmaciones += 1
-
     if fuerza_vela(v2):
         confirmaciones += 1
 
-    if v2['close'] > ema20[-1]:
+    if estr != "lateral":
         confirmaciones += 1
 
-    if v2['close'] > vwap_val:
-        confirmaciones += 1
-
-    if (v2['max'] - v2['min']) > atr_val:
-        confirmaciones += 1
-
-
-    prob = confirmaciones * 15
+    prob = confirmaciones * 20
 
 
     # ======================
@@ -253,14 +225,18 @@ def analizar(conector, par):
 
         if pinbar_alcista(v2) or patron == "CALL":
 
-            if prob >= 60:
+            direccion_m30 = confirmacion_m30(conector, par)
 
-                return {
-                    "direccion": "CALL",
-                    "probabilidad": prob,
-                    "expiracion": exp,
-                    "hora": hora_entrada()
-                }
+            if direccion_m30 == "CALL":
+
+                if prob >= 60:
+
+                    return {
+                        "direccion": "CALL",
+                        "probabilidad": prob,
+                        "expiracion": exp,
+                        "hora": hora_entrada()
+                    }
 
 
     # ======================
@@ -271,14 +247,17 @@ def analizar(conector, par):
 
         if pinbar_bajista(v2) or patron == "PUT":
 
-            if prob >= 60:
+            direccion_m30 = confirmacion_m30(conector, par)
 
-                return {
-                    "direccion": "PUT",
-                    "probabilidad": prob,
-                    "expiracion": exp,
-                    "hora": hora_entrada()
-                }
+            if direccion_m30 == "PUT":
 
+                if prob >= 60:
+
+                    return {
+                        "direccion": "PUT",
+                        "probabilidad": prob,
+                        "expiracion": exp,
+                        "hora": hora_entrada()
+                    }
 
     return None
