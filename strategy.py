@@ -1,83 +1,102 @@
 import time
 import numpy as np
 
-# ================================
-# EMA
-# ================================
 
-def ema(data, period):
+# =====================================
+# DETECTAR SOPORTE Y RESISTENCIA
+# =====================================
 
-    data = np.array(data)
+def soporte_resistencia(velas):
 
-    weights = np.exp(np.linspace(-1., 0., period))
-    weights /= weights.sum()
+    maximos = [v['max'] for v in velas[-30:]]
+    minimos = [v['min'] for v in velas[-30:]]
 
-    a = np.convolve(data, weights, mode='full')[:len(data)]
+    resistencia = max(maximos)
+    soporte = min(minimos)
 
-    a[:period] = a[period]
-
-    return a
+    return soporte, resistencia
 
 
-# ================================
-# RSI
-# ================================
+# =====================================
+# FUERZA DE VELA
+# =====================================
 
-def calcular_rsi(cierres, periodo=14):
+def vela_fuerte(vela):
 
-    cierres = np.array(cierres)
+    cuerpo = abs(vela['close'] - vela['open'])
+    rango = vela['max'] - vela['min']
 
-    delta = np.diff(cierres)
+    if rango == 0:
+        return False
 
-    subida = delta.clip(min=0)
-    bajada = -delta.clip(max=0)
+    fuerza = cuerpo / rango
 
-    media_subida = subida[-periodo:].mean()
-    media_bajada = bajada[-periodo:].mean()
-
-    if media_bajada == 0:
-        return 100
-
-    rs = media_subida / media_bajada
-
-    return 100 - (100 / (1 + rs))
+    return fuerza > 0.6
 
 
-# ================================
-# FILTRO LATERAL
-# ================================
+# =====================================
+# RECHAZO DE PRECIO
+# =====================================
 
-def mercado_lateral(cierres):
+def rechazo_soporte(vela):
 
-    volatilidad = np.std(cierres[-20:])
+    cuerpo = abs(vela['close'] - vela['open'])
 
-    if volatilidad < 0.00005:
-        return True
+    mecha_inferior = min(vela['open'], vela['close']) - vela['min']
 
-    return False
-
-
-# ================================
-# FILTRO MANIPULACION OTC
-# ================================
-
-def manipulacion_otc(velas):
-
-    rangos = [v['max'] - v['min'] for v in velas[-10:]]
-
-    media = np.mean(rangos)
-
-    ultima = velas[-1]['max'] - velas[-1]['min']
-
-    if ultima > media * 3:
-        return True
-
-    return False
+    return mecha_inferior > cuerpo
 
 
-# ================================
+def rechazo_resistencia(vela):
+
+    cuerpo = abs(vela['close'] - vela['open'])
+
+    mecha_superior = vela['max'] - max(vela['open'], vela['close'])
+
+    return mecha_superior > cuerpo
+
+
+# =====================================
+# CALCULAR PROBABILIDAD
+# =====================================
+
+def calcular_probabilidad(fuerza, rechazo, estructura):
+
+    score = 0
+
+    if fuerza:
+        score += 40
+
+    if rechazo:
+        score += 30
+
+    if estructura:
+        score += 30
+
+    return score
+
+
+# =====================================
+# ESTRUCTURA DEL MERCADO
+# =====================================
+
+def estructura_mercado(velas):
+
+    highs = [v['max'] for v in velas[-10:]]
+    lows = [v['min'] for v in velas[-10:]]
+
+    if highs[-1] > highs[-2] and lows[-1] > lows[-2]:
+        return "alcista"
+
+    if highs[-1] < highs[-2] and lows[-1] < lows[-2]:
+        return "bajista"
+
+    return "lateral"
+
+
+# =====================================
 # CALCULAR EXPIRACION
-# ================================
+# =====================================
 
 def calcular_expiracion(velas):
 
@@ -94,77 +113,35 @@ def calcular_expiracion(velas):
     return "5 minutos"
 
 
-# ================================
-# CALCULAR PROBABILIDAD
-# ================================
-
-def calcular_probabilidad(tendencia, rompimiento, rsi, fuerza_vela):
-
-    score = 0
-
-    if tendencia:
-        score += 30
-
-    if rompimiento:
-        score += 30
-
-    if fuerza_vela:
-        score += 20
-
-    if rsi < 40 or rsi > 60:
-        score += 20
-
-    return score
-
-
-# ================================
-# ANALIZAR
-# ================================
+# =====================================
+# ANALIZAR MERCADO
+# =====================================
 
 def analizar(conector, par):
 
-    velas = conector.api.get_candles(par, 60, 120, time.time())
+    velas = conector.api.get_candles(par, 60, 60, time.time())
 
-    cierres = [v['close'] for v in velas]
-
-    if manipulacion_otc(velas):
-        return None
-
-    if mercado_lateral(cierres):
-        return None
-
-    rsi = calcular_rsi(cierres)
-
-    ema50 = ema(cierres, 50)
-    ema100 = ema(cierres, 80)
-
-    tendencia_alcista = ema50[-1] > ema100[-1]
-    tendencia_bajista = ema50[-1] < ema100[-1]
-
-    maximos = [v['max'] for v in velas[-20:]]
-    minimos = [v['min'] for v in velas[-20:]]
-
-    resistencia = max(maximos[:-2])
-    soporte = min(minimos[:-2])
+    soporte, resistencia = soporte_resistencia(velas)
 
     vela_actual = velas[-1]
-    vela_anterior = velas[-2]
+
+    estructura = estructura_mercado(velas)
 
     expiracion = calcular_expiracion(velas)
 
-    fuerza_vela_alcista = vela_actual['close'] > vela_actual['open']
-    fuerza_vela_bajista = vela_actual['close'] < vela_actual['open']
+    fuerza = vela_fuerte(vela_actual)
 
-    # =======================
+    # ===============================
     # CALL
-    # =======================
+    # ===============================
 
-    romp = vela_anterior['close'] > resistencia
-    retest = vela_actual['min'] <= resistencia
+    cerca_soporte = vela_actual['min'] <= soporte * 1.002
 
-    if romp and retest and tendencia_alcista and fuerza_vela_alcista:
+    rechazo = rechazo_soporte(vela_actual)
 
-        prob = calcular_probabilidad(True, True, rsi, True)
+    if cerca_soporte and rechazo and estructura == "alcista":
+
+        prob = calcular_probabilidad(fuerza, rechazo, True)
 
         if prob >= 60:
 
@@ -174,16 +151,17 @@ def analizar(conector, par):
                 "expiracion": expiracion
             }
 
-    # =======================
+    # ===============================
     # PUT
-    # =======================
+    # ===============================
 
-    romp = vela_anterior['close'] < soporte
-    retest = vela_actual['max'] >= soporte
+    cerca_resistencia = vela_actual['max'] >= resistencia * 0.998
 
-    if romp and retest and tendencia_bajista and fuerza_vela_bajista:
+    rechazo = rechazo_resistencia(vela_actual)
 
-        prob = calcular_probabilidad(True, True, rsi, True)
+    if cerca_resistencia and rechazo and estructura == "bajista":
+
+        prob = calcular_probabilidad(fuerza, rechazo, True)
 
         if prob >= 60:
 
