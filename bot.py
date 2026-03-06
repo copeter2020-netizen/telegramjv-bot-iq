@@ -17,11 +17,9 @@ bot.delete_webhook()
 
 print("Iniciando bot...")
 
-# conectar a IQ Option
 iq = ConectorIQ()
 iq.conectar()
 
-# pares a analizar
 pares = [
 "EURUSD-OTC",
 "GBPUSD-OTC",
@@ -84,6 +82,7 @@ def esperar_cierre_vela():
     time.sleep(esperar)
 
 
+# ESTA ES LA FUNCIÓN ANALIZAR MERCADO
 def analizar_mercado():
 
     while True:
@@ -97,27 +96,32 @@ def analizar_mercado():
                 velas = iq.velas(par)
 
                 if not velas:
+                    print("Par no disponible:", par)
                     continue
 
                 decision, tiempo, conf = analizar(velas)
 
-                if decision:
+                if not decision:
+                    continue
 
-                    ultima = velas[-1]
+                ultima = velas[-1]
 
-                    open_price = ultima["open"]
+                open_price = ultima["open"]
 
-                    enviar_senal(par, decision, tiempo, conf)
+                enviar_senal(par, decision, tiempo, conf)
 
-                    time.sleep(tiempo * 60)
+                time.sleep(tiempo * 60)
 
-                    velas_resultado = iq.velas(par)
+                velas_resultado = iq.velas(par)
 
-                    ultima_resultado = velas_resultado[-1]
+                if not velas_resultado:
+                    continue
 
-                    close_price = ultima_resultado["close"]
+                ultima_resultado = velas_resultado[-1]
 
-                    enviar_resultado(par, decision, open_price, close_price)
+                close_price = ultima_resultado["close"]
+
+                enviar_resultado(par, decision, open_price, close_price)
 
             except Exception as e:
 
@@ -130,7 +134,7 @@ def start(msg):
     bot.reply_to(msg, "🤖 Bot de señales iniciado")
 
 
-# hilo del análisis
+# hilo que ejecuta el análisis
 hilo = threading.Thread(target=analizar_mercado)
 
 hilo.daemon = True
@@ -138,7 +142,7 @@ hilo.daemon = True
 hilo.start()
 
 
-# polling seguro
+# polling seguro de telegram
 while True:
 
     try:
@@ -149,4 +153,4 @@ while True:
 
         print("Error polling:", e)
 
-        time.sleep(10)
+        time.sleep(10) 
