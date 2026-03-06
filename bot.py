@@ -12,7 +12,7 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = telebot.TeleBot(TOKEN)
 
-# eliminar webhook para evitar conflicto 409
+# evitar error 409
 bot.delete_webhook()
 
 print("Iniciando bot...")
@@ -21,10 +21,17 @@ print("Iniciando bot...")
 iq = ConectorIQ()
 iq.conectar()
 
-# obtener pares OTC activos
-pares = iq.obtener_pares_abiertos()
+# pares a analizar
+pares = [
+"EURUSD-OTC",
+"GBPUSD-OTC",
+"AUDCAD-OTC",
+"CADCHF-OTC",
+"AUDUSD-OTC",
+"AUDJPY-OTC"
+]
 
-print("Pares OTC activos:", pares)
+print("Pares configurados:", pares)
 
 
 def enviar_senal(par, direccion, tiempo, confirmaciones):
@@ -88,7 +95,7 @@ def start(msg):
     bot.reply_to(msg, "🤖 Bot de señales iniciado")
 
 
-# hilo que analiza el mercado
+# hilo de análisis
 hilo = threading.Thread(target=analizar_mercado)
 
 hilo.daemon = True
@@ -96,7 +103,7 @@ hilo.daemon = True
 hilo.start()
 
 
-# polling seguro para telegram
+# polling seguro
 while True:
 
     try:
@@ -107,4 +114,4 @@ while True:
 
         print("Error polling:", e)
 
-        time.sleep(10) 
+        time.sleep(10)
