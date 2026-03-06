@@ -12,7 +12,7 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = telebot.TeleBot(TOKEN)
 
-# eliminar webhook antiguo para evitar conflicto 409
+# eliminar webhook anterior para evitar error 409
 try:
     bot.remove_webhook()
 except:
@@ -20,7 +20,7 @@ except:
 
 print("Iniciando bot...")
 
-# conexión IQ Option
+# conectar IQ Option
 iq = ConectorIQ()
 iq.conectar()
 
@@ -33,6 +33,7 @@ pares = [
 
 print("Pares configurados:", pares)
 
+# -----------------------------
 
 def enviar_senal(par, direccion, tiempo, confirmaciones):
 
@@ -50,6 +51,7 @@ Confirmaciones: {confirmaciones}
 
     bot.send_message(CHAT_ID, mensaje)
 
+# -----------------------------
 
 def enviar_resultado(par, direccion, open_price, close_price):
 
@@ -72,15 +74,18 @@ Resultado: {resultado}
 
     bot.send_message(CHAT_ID, mensaje)
 
+# -----------------------------
 
 def esperar_cierre_vela():
 
-    ahora = datetime.datetime.utcnow()
+    ahora = datetime.datetime.now(datetime.UTC)
+
     segundos = ahora.second
     esperar = 60 - segundos
 
     time.sleep(esperar)
 
+# -----------------------------
 
 def analizar_mercado():
 
@@ -122,22 +127,25 @@ def analizar_mercado():
 
             except Exception as e:
 
-                print("Error analizando:", par, e)
+                print("Error analizando", par, ":", e)
 
+# -----------------------------
 
 @bot.message_handler(commands=['start'])
 def start(msg):
 
     bot.reply_to(msg, "🤖 Bot activo y analizando mercado")
 
+# -----------------------------
 
-# hilo de análisis
+# iniciar hilo de análisis
 hilo = threading.Thread(target=analizar_mercado)
 hilo.daemon = True
 hilo.start()
 
+# -----------------------------
 
-# polling seguro (reconexión automática)
+# polling seguro con reconexión automática
 while True:
 
     try:
@@ -147,6 +155,6 @@ while True:
 
     except Exception as e:
 
-        print("Error de conexión:", e)
+        print("Error polling:", e)
         print("Reintentando en 10 segundos...")
         time.sleep(10)
