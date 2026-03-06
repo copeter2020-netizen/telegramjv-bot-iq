@@ -25,6 +25,7 @@ if not IQ_EMAIL or not IQ_PASSWORD:
 
 bot = telebot.TeleBot(TOKEN)
 
+# SOLUCIÓN ERROR 409 TELEGRAM
 try:
     bot.remove_webhook()
 except:
@@ -32,8 +33,10 @@ except:
 
 time.sleep(2)
 
+print("🚀 Iniciando bot...")
+
 # =====================================
-# CONECTAR IQ OPTION
+# CONECTAR A IQ OPTION
 # =====================================
 
 conector = ConectorIQ(IQ_EMAIL, IQ_PASSWORD)
@@ -41,13 +44,18 @@ conector = ConectorIQ(IQ_EMAIL, IQ_PASSWORD)
 def conectar_iq():
 
     try:
+
         if conector.conectar():
+
             print("✅ Conectado a IQ Option")
+
         else:
-            print("❌ Error conectando a IQ Option")
+
+            print("❌ No se pudo conectar a IQ Option")
 
     except Exception as e:
-        print("Error conexión IQ:", e)
+
+        print("Error conectando a IQ:", e)
 
 conectar_iq()
 
@@ -69,6 +77,8 @@ PARES_OTC = {
     "AUDCADOTC": "AUDCAD-OTC"
 }
 
+print("📊 Pares configurados:", list(PARES_OTC.values()))
+
 # =====================================
 # COMANDO /comenzar
 # =====================================
@@ -78,9 +88,9 @@ def comenzar(mensaje):
 
     texto = (
         "🤖 BOT OTC ACTIVO\n\n"
-        "Comandos:\n"
-        "/auto → Activar señales automáticas\n"
-        "/stop → Detener señales\n\n"
+        "Comandos disponibles:\n\n"
+        "/auto → activar señales automáticas\n"
+        "/stop → detener señales\n\n"
         "Análisis manual:\n"
         "EURUSDOTC\n"
         "GBPUSDOTC\n"
@@ -135,23 +145,23 @@ def manejar_mensaje(mensaje):
 
             if señal:
 
-                mensaje_envio = (
+                respuesta = (
                     "📊 ANÁLISIS\n\n"
                     f"Par: {par}\n"
-                    f"{señal}"
+                    f"Dirección: {señal}"
                 )
 
             else:
 
-                mensaje_envio = (
+                respuesta = (
                     "📊 ANÁLISIS\n\n"
                     f"Par: {par}\n"
                     "Sin señal clara"
                 )
 
-            bot.reply_to(mensaje, mensaje_envio)
+            bot.reply_to(mensaje, respuesta)
 
-        except:
+        except Exception as e:
 
             bot.reply_to(mensaje, f"⚠️ Error analizando {par}")
 
@@ -197,10 +207,10 @@ def auto_signals():
 
                 except Exception as e:
 
-                    print("Error analizando", par, e)
+                    print("⚠️ Error analizando", par, e)
 
-        # ANALIZA CADA 10 SEGUNDOS
-        time.sleep(10)
+        # Analiza cada 30 segundos (más estable)
+        time.sleep(30)
 
 # =====================================
 # INICIAR BOT
@@ -208,6 +218,6 @@ def auto_signals():
 
 threading.Thread(target=auto_signals).start()
 
-print("🚀 Bot corriendo...")
+print("🤖 Bot conectado a Telegram...")
 
-bot.infinity_polling() 
+bot.infinity_polling()
