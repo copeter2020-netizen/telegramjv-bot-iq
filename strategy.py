@@ -1,12 +1,21 @@
 import time
 import numpy as np
 
+
+# =====================================
+# HORA DE ENTRADA
+# =====================================
+
 def hora_entrada():
 
     ahora = time.localtime()
 
     return f"{ahora.tm_hour:02d}:{ahora.tm_min:02d}"
 
+
+# =====================================
+# EMA
+# =====================================
 
 def ema(data, period):
 
@@ -22,13 +31,24 @@ def ema(data, period):
     return a
 
 
+# =====================================
+# SOPORTE Y RESISTENCIA
+# =====================================
+
 def soporte_resistencia(velas):
 
     highs = [v['max'] for v in velas[-40:]]
     lows = [v['min'] for v in velas[-40:]]
 
-    return min(lows), max(highs)
+    resistencia = max(highs)
+    soporte = min(lows)
 
+    return soporte, resistencia
+
+
+# =====================================
+# ESTRUCTURA DEL MERCADO
+# =====================================
 
 def estructura(velas):
 
@@ -44,6 +64,10 @@ def estructura(velas):
     return "lateral"
 
 
+# =====================================
+# FUERZA DE VELA
+# =====================================
+
 def fuerza_vela(v):
 
     cuerpo = abs(v['close'] - v['open'])
@@ -55,6 +79,10 @@ def fuerza_vela(v):
     return cuerpo / rango > 0.6
 
 
+# =====================================
+# VELA IMPULSO
+# =====================================
+
 def vela_impulso(v):
 
     cuerpo = abs(v['close'] - v['open'])
@@ -65,6 +93,10 @@ def vela_impulso(v):
 
     return cuerpo / rango > 0.7
 
+
+# =====================================
+# ENGULFING
+# =====================================
 
 def engulfing(v1, v2):
 
@@ -80,6 +112,10 @@ def engulfing(v1, v2):
 
     return None
 
+
+# =====================================
+# PIN BAR
+# =====================================
 
 def pinbar_alcista(v):
 
@@ -99,6 +135,10 @@ def pinbar_bajista(v):
     return mecha > cuerpo * 2
 
 
+# =====================================
+# CONFIRMACION MULTI TIMEFRAME
+# =====================================
+
 def confirmacion_tf(conector, par, timeframe):
 
     velas = conector.api.get_candles(par, timeframe, 50, time.time())
@@ -116,6 +156,10 @@ def confirmacion_tf(conector, par, timeframe):
     return None
 
 
+# =====================================
+# VOLUMEN
+# =====================================
+
 def volumen_fuerte(velas):
 
     vol = [v.get("volume", 1) for v in velas[-10:]]
@@ -124,6 +168,10 @@ def volumen_fuerte(velas):
 
     return vol[-1] > promedio
 
+
+# =====================================
+# EXPIRACION
+# =====================================
 
 def expiracion(velas):
 
@@ -143,6 +191,10 @@ def expiracion(velas):
     return 4
 
 
+# =====================================
+# ESPERAR CIERRE DE VELA
+# =====================================
+
 def esperar_cierre():
 
     while True:
@@ -152,6 +204,10 @@ def esperar_cierre():
 
         time.sleep(0.5)
 
+
+# =====================================
+# ANALIZAR MERCADO
+# =====================================
 
 def analizar(conector, par):
 
@@ -187,10 +243,17 @@ def analizar(conector, par):
     if estr != "lateral":
         confirmaciones += 1
 
+
+    # Confirmación marcos mayores
     tf5 = confirmacion_tf(conector, par, 300)
     tf30 = confirmacion_tf(conector, par, 1800)
 
     prob = confirmaciones * 25
+
+
+    # =====================================
+    # CALL
+    # =====================================
 
     if v2['min'] <= soporte * 1.002 and estr == "alcista":
 
@@ -206,6 +269,11 @@ def analizar(conector, par):
                         "expiracion": exp,
                         "hora": hora_entrada()
                     }
+
+
+    # =====================================
+    # PUT
+    # =====================================
 
     if v2['max'] >= resistencia * 0.998 and estr == "bajista":
 
