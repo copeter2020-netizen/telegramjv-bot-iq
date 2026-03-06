@@ -12,18 +12,19 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = telebot.TeleBot(TOKEN)
 
-# evita error 409
+# eliminar webhook antiguo para evitar conflicto 409
 try:
-    bot.delete_webhook()
+    bot.remove_webhook()
 except:
     pass
 
 print("Iniciando bot...")
 
+# conexión IQ Option
 iq = ConectorIQ()
 iq.conectar()
 
-# PARES OTC
+# pares OTC
 pares = [
 "EURUSD-OTC",
 "GBPUSD-OTC",
@@ -75,9 +76,7 @@ Resultado: {resultado}
 def esperar_cierre_vela():
 
     ahora = datetime.datetime.utcnow()
-
     segundos = ahora.second
-
     esperar = 60 - segundos
 
     time.sleep(esperar)
@@ -105,7 +104,6 @@ def analizar_mercado():
                     continue
 
                 ultima = velas[-1]
-
                 open_price = ultima["open"]
 
                 enviar_senal(par, decision, tiempo, conf)
@@ -114,38 +112,41 @@ def analizar_mercado():
 
                 velas_resultado = iq.velas(par)
 
-                if velas_resultado is None or len(velas_resultado) == 0:
+                if velas_resultado is None:
                     continue
 
                 ultima_resultado = velas_resultado[-1]
-
                 close_price = ultima_resultado["close"]
 
                 enviar_resultado(par, decision, open_price, close_price)
 
             except Exception as e:
 
-                print("Error analizando", par, ":", e)
+                print("Error analizando:", par, e)
 
 
 @bot.message_handler(commands=['start'])
 def start(msg):
 
-    bot.reply_to(msg, "🤖 Bot iniciado correctamente")
+    bot.reply_to(msg, "🤖 Bot activo y analizando mercado")
 
 
-# hilo análisis
+# hilo de análisis
 hilo = threading.Thread(target=analizar_mercado)
 hilo.daemon = True
 hilo.start()
 
 
+# polling seguro (reconexión automática)
 while True:
 
     try:
+
+        print("Bot conectado a Telegram...")
         bot.infinity_polling(timeout=60, long_polling_timeout=60)
 
     except Exception as e:
 
-        print("Error polling:", e)
+        print("Error de conexión:", e)
+        print("Reintentando en 10 segundos...")
         time.sleep(10)
