@@ -5,6 +5,7 @@ import threading
 from iq_connector import ConectorIQ
 from strategy import analizar
 
+
 # =====================================
 # VARIABLES DE ENTORNO
 # =====================================
@@ -19,13 +20,13 @@ if not TOKEN:
 if not IQ_EMAIL or not IQ_PASSWORD:
     raise ValueError("Credenciales IQ no configuradas")
 
+
 # =====================================
 # INICIALIZAR BOT
 # =====================================
 
 bot = telebot.TeleBot(TOKEN)
 
-# Evita conflicto con webhook
 try:
     bot.remove_webhook()
 except:
@@ -33,29 +34,30 @@ except:
 
 time.sleep(2)
 
+
 # =====================================
 # CONECTAR IQ OPTION
 # =====================================
 
 conector = ConectorIQ(IQ_EMAIL, IQ_PASSWORD)
 
+
 def conectar_iq():
 
     try:
 
         if conector.conectar():
-
             print("✅ Conectado a IQ Option")
 
         else:
-
             print("❌ Error conexión IQ")
 
     except Exception as e:
+        print("Error:", e)
 
-        print("Error conectando:", e)
 
 conectar_iq()
+
 
 # =====================================
 # VARIABLES
@@ -65,19 +67,31 @@ AUTO = False
 CHAT_ID = None
 ULTIMA_SEÑAL = {}
 
+
 # =====================================
-# PARES OTC ESTABLES
+# LISTA DE PARES OTC
 # =====================================
 
 PARES_OTC = {
 
 "EURUSDOTC": "EURUSD-OTC",
 "GBPUSDOTC": "GBPUSD-OTC",
+"AUDCADOTC": "AUDCAD-OTC",
+"AUDUSDOTC": "AUDUSD-OTC",
 "EURGBPOTC": "EURGBP-OTC",
 "USDJPYOTC": "USDJPY-OTC",
-"EURJPYOTC": "EURJPY-OTC"
-
+"EURJPYOTC": "EURJPY-OTC",
+"USDCADOTC": "USDCAD-OTC",
+"NZDUSDOTC": "NZDUSD-OTC",
+"GBPJPYOTC": "GBPJPY-OTC",
+"AUDJPYOTC": "AUDJPY-OTC",
+"CADJPYOTC": "CADJPY-OTC",
+"EURCADOTC": "EURCAD-OTC",
+"GBPCADOTC": "GBPCAD-OTC",
+"NZDJPYOTC": "NZDJPY-OTC",
+"EURCHFOTC": "EURCHF-OTC"
 }
+
 
 # =====================================
 # COMANDO /comenzar
@@ -91,15 +105,14 @@ def comenzar(mensaje):
         "Comandos:\n"
         "/auto → activar señales automáticas\n"
         "/stop → detener señales\n\n"
-        "Pares disponibles:\n"
+        "También puedes escribir el par:\n"
         "EURUSDOTC\n"
         "GBPUSDOTC\n"
-        "EURGBPOTC\n"
-        "USDJPYOTC\n"
-        "EURJPYOTC"
+        "AUDCADOTC"
     )
 
     bot.reply_to(mensaje, texto)
+
 
 # =====================================
 # ACTIVAR AUTO
@@ -115,6 +128,7 @@ def auto(mensaje):
 
     bot.reply_to(mensaje, "🚀 Señales automáticas activadas")
 
+
 # =====================================
 # DETENER AUTO
 # =====================================
@@ -128,43 +142,39 @@ def stop(mensaje):
 
     bot.reply_to(mensaje, "⛔ Señales detenidas")
 
+
 # =====================================
-# ANALISIS MANUAL
+# MENSAJE MANUAL
 # =====================================
 
 @bot.message_handler(func=lambda m: True)
-def manual(mensaje):
+def mensaje(m):
 
-    texto = mensaje.text.upper()
+    texto = m.text.upper()
 
     if texto in PARES_OTC:
 
         par = PARES_OTC[texto]
 
-        try:
+        resultado = analizar(conector, par)
 
-            resultado = analizar(conector, par)
+        if resultado:
 
-            if resultado:
+            mensaje = (
+                "📊 SEÑAL OTC\n\n"
+                f"Par: {par}\n"
+                f"Hora: {resultado['hora']}\n"
+                f"Dirección: {resultado['direccion']}\n"
+                f"Probabilidad: {resultado['probabilidad']}%\n"
+                f"Expiración: {resultado['expiracion']} minutos"
+            )
 
-                respuesta = (
-                    "📊 SEÑAL OTC\n\n"
-                    f"Par: {par}\n"
-                    f"Hora: {resultado['hora']}\n"
-                    f"Dirección: {resultado['direccion']}\n"
-                    f"Probabilidad: {resultado['probabilidad']}%\n"
-                    f"Expiración: {resultado['expiracion']} minutos"
-                )
+            bot.reply_to(m, mensaje)
 
-                bot.reply_to(mensaje, respuesta)
+        else:
 
-            else:
+            bot.reply_to(m, "❌ No hay señal clara")
 
-                bot.reply_to(mensaje, "❌ No hay señal clara")
-
-        except Exception as e:
-
-            print("Error análisis manual:", e)
 
 # =====================================
 # SEÑALES AUTOMÁTICAS
@@ -213,6 +223,7 @@ def auto_signals():
                     print("Error analizando", par, e)
 
         time.sleep(20)
+
 
 # =====================================
 # INICIAR BOT
