@@ -32,6 +32,21 @@ def ema(data, period):
 
 
 # =====================================
+# FUERZA DE VELA
+# =====================================
+
+def fuerza_vela(v):
+
+    cuerpo = abs(v['close'] - v['open'])
+    rango = v['max'] - v['min']
+
+    if rango == 0:
+        return False
+
+    return cuerpo / rango > 0.6
+
+
+# =====================================
 # SOPORTE Y RESISTENCIA
 # =====================================
 
@@ -62,43 +77,6 @@ def estructura(velas):
 
 
 # =====================================
-# FUERZA DE VELA
-# =====================================
-
-def fuerza_vela(vela):
-
-    cuerpo = abs(vela['close'] - vela['open'])
-    rango = vela['max'] - vela['min']
-
-    if rango == 0:
-        return False
-
-    return cuerpo / rango > 0.6
-
-
-# =====================================
-# PINBAR
-# =====================================
-
-def pinbar_alcista(v):
-
-    cuerpo = abs(v['close'] - v['open'])
-
-    mecha = min(v['open'], v['close']) - v['min']
-
-    return mecha > cuerpo * 2
-
-
-def pinbar_bajista(v):
-
-    cuerpo = abs(v['close'] - v['open'])
-
-    mecha = v['max'] - max(v['open'], v['close'])
-
-    return mecha > cuerpo * 2
-
-
-# =====================================
 # ENGULFING
 # =====================================
 
@@ -118,32 +96,57 @@ def engulfing(v1, v2):
 
 
 # =====================================
-# CONFIRMACION MARCO MAYOR (M30)
+# PIN BAR
 # =====================================
 
-def confirmacion_m30(conector, par):
+def pinbar_alcista(v):
 
-    velas = conector.api.get_candles(par, 1800, 50, time.time())
+    cuerpo = abs(v['close'] - v['open'])
+    mecha = min(v['open'], v['close']) - v['min']
+
+    return mecha > cuerpo * 2
+
+
+def pinbar_bajista(v):
+
+    cuerpo = abs(v['close'] - v['open'])
+    mecha = v['max'] - max(v['open'], v['close'])
+
+    return mecha > cuerpo * 2
+
+
+# =====================================
+# CONFIRMACION MARCO MAYOR
+# =====================================
+
+def confirmacion_tf(conector, par, tf):
+
+    velas = conector.api.get_candles(par, tf, 50, time.time())
 
     cierres = [v['close'] for v in velas]
 
     ema20 = ema(cierres, 20)
 
-    tendencia_alcista = cierres[-1] > ema20[-1]
-    tendencia_bajista = cierres[-1] < ema20[-1]
-
-    v1 = velas[-2]
-    v2 = velas[-1]
-
-    patron = engulfing(v1, v2)
-
-    if tendencia_alcista or patron == "CALL":
+    if cierres[-1] > ema20[-1]:
         return "CALL"
 
-    if tendencia_bajista or patron == "PUT":
+    if cierres[-1] < ema20[-1]:
         return "PUT"
 
     return None
+
+
+# =====================================
+# VOLUMEN
+# =====================================
+
+def volumen_fuerte(velas):
+
+    vol = [v.get("volume", 1) for v in velas[-10:]]
+
+    promedio = np.mean(vol)
+
+    return vol[-1] > promedio
 
 
 # =====================================
@@ -211,25 +214,28 @@ def analizar(conector, par):
     if fuerza_vela(v2):
         confirmaciones += 1
 
+    if volumen_fuerte(velas):
+        confirmaciones += 1
+
     if estr != "lateral":
         confirmaciones += 1
+
+
+    # confirmación multi timeframe
+    tf5 = confirmacion_tf(conector, par, 300)
+    tf30 = confirmacion_tf(conector, par, 1800)
 
     prob = confirmaciones * 20
 
 
-    # ======================
     # CALL
-    # ======================
-
     if v2['min'] <= soporte * 1.002 and estr == "alcista":
 
         if pinbar_alcista(v2) or patron == "CALL":
 
-            direccion_m30 = confirmacion_m30(conector, par)
+            if tf5 == "CALL" and tf30 == "CALL":
 
-            if direccion_m30 == "CALL":
-
-                if prob >= 60:
+                if prob >= 80:
 
                     return {
                         "direccion": "CALL",
@@ -239,19 +245,14 @@ def analizar(conector, par):
                     }
 
 
-    # ======================
     # PUT
-    # ======================
-
     if v2['max'] >= resistencia * 0.998 and estr == "bajista":
 
         if pinbar_bajista(v2) or patron == "PUT":
 
-            direccion_m30 = confirmacion_m30(conector, par)
+            if tf5 == "PUT" and tf30 == "PUT":
 
-            if direccion_m30 == "PUT":
-
-                if prob >= 60:
+                if prob >= 80:
 
                     return {
                         "direccion": "PUT",
