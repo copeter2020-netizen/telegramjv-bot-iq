@@ -1,3 +1,4 @@
+import time
 import numpy as np
 
 def calcular_rsi(cierres, periodo=14):
@@ -24,24 +25,24 @@ def calcular_rsi(cierres, periodo=14):
 
 def analizar(conector, par):
 
-    velas = conector.api.get_candles(par, 60, 30, time.time())
+    velas = conector.api.get_candles(par, 60, 50, time.time())
 
-    cierres = [v['close'] for v in velas]
+    cierres = [vela['close'] for vela in velas]
 
     rsi = calcular_rsi(cierres)
 
     ultima = velas[-1]
     anterior = velas[-2]
 
-    # tendencia
-    tendencia = np.mean(cierres[-5:]) - np.mean(cierres[-15:-5])
+    tendencia_corta = np.mean(cierres[-5:])
+    tendencia_larga = np.mean(cierres[-20:])
 
-    # señal CALL
-    if rsi < 30 and ultima['close'] > ultima['open'] and tendencia > 0:
-        return "📈 CALL"
+    # CALL
+    if rsi < 30 and ultima['close'] > ultima['open'] and tendencia_corta > tendencia_larga:
+        return "CALL"
 
-    # señal PUT
-    if rsi > 70 and ultima['close'] < ultima['open'] and tendencia < 0:
-        return "📉 PUT"
+    # PUT
+    if rsi > 70 and ultima['close'] < ultima['open'] and tendencia_corta < tendencia_larga:
+        return "PUT"
 
     return None 
