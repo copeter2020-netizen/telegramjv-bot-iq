@@ -1,9 +1,9 @@
 import time
 import numpy as np
 
-# =====================================
+# ================================
 # EMA
-# =====================================
+# ================================
 
 def ema(data, period):
 
@@ -19,9 +19,9 @@ def ema(data, period):
     return a
 
 
-# =====================================
+# ================================
 # RSI
-# =====================================
+# ================================
 
 def calcular_rsi(cierres, periodo=14):
 
@@ -40,14 +40,12 @@ def calcular_rsi(cierres, periodo=14):
 
     rs = media_subida / media_bajada
 
-    rsi = 100 - (100 / (1 + rs))
-
-    return rsi
+    return 100 - (100 / (1 + rs))
 
 
-# =====================================
-# FILTRO MERCADO LATERAL
-# =====================================
+# ================================
+# FILTRO LATERAL
+# ================================
 
 def mercado_lateral(cierres):
 
@@ -59,9 +57,9 @@ def mercado_lateral(cierres):
     return False
 
 
-# =====================================
+# ================================
 # FILTRO MANIPULACION OTC
-# =====================================
+# ================================
 
 def manipulacion_otc(velas):
 
@@ -77,29 +75,9 @@ def manipulacion_otc(velas):
     return False
 
 
-# =====================================
-# CALCULAR PROBABILIDAD
-# =====================================
-
-def probabilidad(tendencia, rompimiento, rsi):
-
-    score = 0
-
-    if tendencia:
-        score += 40
-
-    if rompimiento:
-        score += 40
-
-    if rsi < 40 or rsi > 60:
-        score += 20
-
-    return score
-
-
-# =====================================
-# CALCULAR TIEMPO DE EXPIRACION
-# =====================================
+# ================================
+# CALCULAR EXPIRACION
+# ================================
 
 def calcular_expiracion(velas):
 
@@ -116,9 +94,32 @@ def calcular_expiracion(velas):
     return "5 minutos"
 
 
-# =====================================
-# ANALIZAR MERCADO
-# =====================================
+# ================================
+# CALCULAR PROBABILIDAD
+# ================================
+
+def calcular_probabilidad(tendencia, rompimiento, rsi, fuerza_vela):
+
+    score = 0
+
+    if tendencia:
+        score += 30
+
+    if rompimiento:
+        score += 30
+
+    if fuerza_vela:
+        score += 20
+
+    if rsi < 40 or rsi > 60:
+        score += 20
+
+    return score
+
+
+# ================================
+# ANALIZAR
+# ================================
 
 def analizar(conector, par):
 
@@ -126,24 +127,20 @@ def analizar(conector, par):
 
     cierres = [v['close'] for v in velas]
 
-    # FILTROS
     if manipulacion_otc(velas):
         return None
 
     if mercado_lateral(cierres):
         return None
 
-    # RSI
     rsi = calcular_rsi(cierres)
 
-    # TENDENCIA
     ema50 = ema(cierres, 50)
     ema100 = ema(cierres, 80)
 
     tendencia_alcista = ema50[-1] > ema100[-1]
     tendencia_bajista = ema50[-1] < ema100[-1]
 
-    # SOPORTE Y RESISTENCIA
     maximos = [v['max'] for v in velas[-20:]]
     minimos = [v['min'] for v in velas[-20:]]
 
@@ -155,38 +152,45 @@ def analizar(conector, par):
 
     expiracion = calcular_expiracion(velas)
 
-    # =====================================
-    # CALL
-    # =====================================
+    fuerza_vela_alcista = vela_actual['close'] > vela_actual['open']
+    fuerza_vela_bajista = vela_actual['close'] < vela_actual['open']
 
-    rompimiento = vela_anterior['close'] > resistencia
+    # =======================
+    # CALL
+    # =======================
+
+    romp = vela_anterior['close'] > resistencia
     retest = vela_actual['min'] <= resistencia
 
-    vela_fuerte = vela_actual['close'] > vela_actual['open']
+    if romp and retest and tendencia_alcista and fuerza_vela_alcista:
 
-    if rompimiento and retest and tendencia_alcista and vela_fuerte and rsi < 60:
+        prob = calcular_probabilidad(True, True, rsi, True)
 
-        prob = probabilidad(True, True, rsi)
+        if prob >= 60:
 
-        if prob >= 70:
-            return f"CALL\nProbabilidad: {prob}%\nExpiración: {expiracion}"
+            return {
+                "direccion": "CALL",
+                "probabilidad": prob,
+                "expiracion": expiracion
+            }
 
-
-    # =====================================
+    # =======================
     # PUT
-    # =====================================
+    # =======================
 
-    rompimiento = vela_anterior['close'] < soporte
+    romp = vela_anterior['close'] < soporte
     retest = vela_actual['max'] >= soporte
 
-    vela_fuerte = vela_actual['close'] < vela_actual['open']
+    if romp and retest and tendencia_bajista and fuerza_vela_bajista:
 
-    if rompimiento and retest and tendencia_bajista and vela_fuerte and rsi > 40:
+        prob = calcular_probabilidad(True, True, rsi, True)
 
-        prob = probabilidad(True, True, rsi)
+        if prob >= 60:
 
-        if prob >= 70:
-            return f"PUT\nProbabilidad: {prob}%\nExpiración: {expiracion}"
-
+            return {
+                "direccion": "PUT",
+                "probabilidad": prob,
+                "expiracion": expiracion
+            }
 
     return None
