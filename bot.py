@@ -5,7 +5,6 @@ import threading
 from iq_connector import ConectorIQ
 from strategy import analizar
 
-
 # =====================================
 # VARIABLES DE ENTORNO
 # =====================================
@@ -20,7 +19,6 @@ if not TOKEN:
 if not IQ_EMAIL or not IQ_PASSWORD:
     raise ValueError("Credenciales IQ no configuradas")
 
-
 # =====================================
 # INICIALIZAR BOT
 # =====================================
@@ -34,30 +32,29 @@ except:
 
 time.sleep(2)
 
-
 # =====================================
-# CONECTAR IQ OPTION
+# CONEXIÓN IQ OPTION
 # =====================================
 
 conector = ConectorIQ(IQ_EMAIL, IQ_PASSWORD)
-
 
 def conectar_iq():
 
     try:
 
         if conector.conectar():
+
             print("✅ Conectado a IQ Option")
 
         else:
+
             print("❌ Error conexión IQ")
 
     except Exception as e:
+
         print("Error:", e)
 
-
 conectar_iq()
-
 
 # =====================================
 # VARIABLES
@@ -67,88 +64,85 @@ AUTO = False
 CHAT_ID = None
 ULTIMA_SEÑAL = {}
 
-
 # =====================================
-# LISTA DE PARES OTC
+# PARES OTC
 # =====================================
 
 PARES_OTC = {
 
 "EURUSDOTC": "EURUSD-OTC",
 "GBPUSDOTC": "GBPUSD-OTC",
-"AUDCADOTC": "AUDCAD-OTC",
-"AUDUSDOTC": "AUDUSD-OTC",
 "EURGBPOTC": "EURGBP-OTC",
 "USDJPYOTC": "USDJPY-OTC",
-"EURJPYOTC": "EURJPY-OTC",
-"USDCADOTC": "USDCAD-OTC",
-"NZDUSDOTC": "NZDUSD-OTC",
-"GBPJPYOTC": "GBPJPY-OTC",
 "AUDJPYOTC": "AUDJPY-OTC",
-"CADJPYOTC": "CADJPY-OTC",
-"EURCADOTC": "EURCAD-OTC",
-"GBPCADOTC": "GBPCAD-OTC",
-"NZDJPYOTC": "NZDJPY-OTC",
-"EURCHFOTC": "EURCHF-OTC"
+"AUDCADOTC": "AUDCAD-OTC",
+"AUDNZDOTC": "AUDNZD-OTC",
+"AUDCHFOTC": "AUDCHF-OTC",
+"CADCHFOTC": "CADCHF-OTC",
+"EURJPYOTC": "EURJPY-OTC"
+
 }
 
-
 # =====================================
-# COMANDO /comenzar
+# COMANDO COMENZAR
 # =====================================
 
 @bot.message_handler(commands=['comenzar'])
-def comenzar(mensaje):
+def comenzar(m):
 
     texto = (
         "🤖 BOT OTC ACTIVO\n\n"
         "Comandos:\n"
-        "/auto → activar señales automáticas\n"
+        "/auto → activar señales\n"
         "/stop → detener señales\n\n"
-        "También puedes escribir el par:\n"
+        "Pares disponibles:\n"
         "EURUSDOTC\n"
         "GBPUSDOTC\n"
-        "AUDCADOTC"
+        "EURGBPOTC\n"
+        "USDJPYOTC\n"
+        "AUDJPYOTC\n"
+        "AUDCADOTC\n"
+        "AUDNZDOTC\n"
+        "AUDCHFOTC\n"
+        "CADCHFOTC\n"
+        "EURJPYOTC"
     )
 
-    bot.reply_to(mensaje, texto)
-
+    bot.reply_to(m, texto)
 
 # =====================================
 # ACTIVAR AUTO
 # =====================================
 
 @bot.message_handler(commands=['auto'])
-def auto(mensaje):
+def auto(m):
 
     global AUTO, CHAT_ID
 
     AUTO = True
-    CHAT_ID = mensaje.chat.id
+    CHAT_ID = m.chat.id
 
-    bot.reply_to(mensaje, "🚀 Señales automáticas activadas")
-
+    bot.reply_to(m, "🚀 Señales automáticas activadas")
 
 # =====================================
 # DETENER AUTO
 # =====================================
 
 @bot.message_handler(commands=['stop'])
-def stop(mensaje):
+def stop(m):
 
     global AUTO
 
     AUTO = False
 
-    bot.reply_to(mensaje, "⛔ Señales detenidas")
-
+    bot.reply_to(m, "⛔ Señales detenidas")
 
 # =====================================
-# MENSAJE MANUAL
+# ANALISIS MANUAL
 # =====================================
 
 @bot.message_handler(func=lambda m: True)
-def mensaje(m):
+def manual(m):
 
     texto = m.text.upper()
 
@@ -174,7 +168,6 @@ def mensaje(m):
         else:
 
             bot.reply_to(m, "❌ No hay señal clara")
-
 
 # =====================================
 # SEÑALES AUTOMÁTICAS
@@ -224,7 +217,6 @@ def auto_signals():
 
         time.sleep(20)
 
-
 # =====================================
 # INICIAR BOT
 # =====================================
@@ -233,4 +225,4 @@ threading.Thread(target=auto_signals).start()
 
 print("🚀 BOT CORRIENDO...")
 
-bot.infinity_polling() 
+bot.infinity_polling()
