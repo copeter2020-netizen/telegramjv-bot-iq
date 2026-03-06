@@ -12,16 +12,19 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = telebot.TeleBot(TOKEN)
 
-# evita error 409
-bot.delete_webhook()
+# Evita conflicto 409
+try:
+    bot.delete_webhook()
+except:
+    pass
 
 print("Iniciando bot...")
 
-# conectar a IQ Option
+# conectar IQ Option
 iq = ConectorIQ()
 iq.conectar()
 
-# PARES QUE ANALIZA EL BOT
+# PARES OTC A ANALIZAR
 pares = [
 "EURUSD-OTC",
 "GBPUSD-OTC",
@@ -31,6 +34,7 @@ pares = [
 
 print("Pares configurados:", pares)
 
+# -------------------------------------
 
 def enviar_senal(par, direccion, tiempo, confirmaciones):
 
@@ -48,18 +52,17 @@ Confirmaciones: {confirmaciones}
 
     bot.send_message(CHAT_ID, mensaje)
 
+# -------------------------------------
 
 def enviar_resultado(par, direccion, open_price, close_price):
 
     resultado = "LOSS"
 
-    if direccion == "CALL":
-        if close_price > open_price:
-            resultado = "WIN"
+    if direccion == "CALL" and close_price > open_price:
+        resultado = "WIN"
 
-    if direccion == "PUT":
-        if close_price < open_price:
-            resultado = "WIN"
+    if direccion == "PUT" and close_price < open_price:
+        resultado = "WIN"
 
     mensaje = f"""
 📊 RESULTADO
@@ -72,10 +75,11 @@ Resultado: {resultado}
 
     bot.send_message(CHAT_ID, mensaje)
 
+# -------------------------------------
 
 def esperar_cierre_vela():
 
-    ahora = datetime.datetime.now(datetime.UTC)
+    ahora = datetime.datetime.utcnow()
 
     segundos = ahora.second
 
@@ -83,6 +87,7 @@ def esperar_cierre_vela():
 
     time.sleep(esperar)
 
+# -------------------------------------
 
 def analizar_mercado():
 
@@ -96,7 +101,7 @@ def analizar_mercado():
 
                 velas = iq.velas(par)
 
-                if not velas:
+                if velas is None or len(velas) == 0:
                     print("Par no disponible:", par)
                     continue
 
@@ -116,7 +121,7 @@ def analizar_mercado():
 
                 velas_resultado = iq.velas(par)
 
-                if not velas_resultado:
+                if velas_resultado is None or len(velas_resultado) == 0:
                     continue
 
                 ultima_resultado = velas_resultado[-1]
@@ -127,24 +132,25 @@ def analizar_mercado():
 
             except Exception as e:
 
-                print("Error analizando:", par, e)
+                print("Error analizando", par, ":", e)
 
+# -------------------------------------
 
 @bot.message_handler(commands=['start'])
 def start(msg):
 
     bot.reply_to(msg, "🤖 Bot de señales iniciado")
 
+# -------------------------------------
 
 # hilo de análisis
 hilo = threading.Thread(target=analizar_mercado)
-
 hilo.daemon = True
-
 hilo.start()
 
+# -------------------------------------
 
-# polling estable
+# polling seguro
 while True:
 
     try:
@@ -154,5 +160,4 @@ while True:
     except Exception as e:
 
         print("Error polling:", e)
-
-        time.sleep(10)
+        time.sleep(10) 
