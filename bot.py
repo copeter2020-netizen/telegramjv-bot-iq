@@ -12,10 +12,12 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 bot = telebot.TeleBot(TOKEN)
 
-# evitar conflicto 409
+# eliminar webhook para evitar conflicto 409
 bot.delete_webhook()
 
-# conectar IQ Option
+print("Iniciando bot...")
+
+# conectar a IQ Option
 iq = ConectorIQ()
 iq.conectar()
 
@@ -25,7 +27,7 @@ pares = iq.obtener_pares_abiertos()
 print("Pares OTC activos:", pares)
 
 
-def enviar_senal(par, direccion, tiempo, conf):
+def enviar_senal(par, direccion, tiempo, confirmaciones):
 
     mensaje = f"""
 📊 SEÑAL IQ OPTION
@@ -36,7 +38,7 @@ Dirección: {direccion}
 Entrada: siguiente vela
 Expiración: {tiempo} minutos
 
-Confirmaciones: {conf}
+Confirmaciones: {confirmaciones}
 """
 
     bot.send_message(CHAT_ID, mensaje)
@@ -44,7 +46,7 @@ Confirmaciones: {conf}
 
 def esperar_cierre_vela():
 
-    ahora = datetime.datetime.utcnow()
+    ahora = datetime.datetime.now(datetime.UTC)
 
     segundos = ahora.second
 
@@ -86,7 +88,7 @@ def start(msg):
     bot.reply_to(msg, "🤖 Bot de señales iniciado")
 
 
-# hilo para analizar mercado
+# hilo que analiza el mercado
 hilo = threading.Thread(target=analizar_mercado)
 
 hilo.daemon = True
@@ -94,7 +96,7 @@ hilo.daemon = True
 hilo.start()
 
 
-# polling seguro
+# polling seguro para telegram
 while True:
 
     try:
