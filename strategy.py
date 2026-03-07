@@ -3,9 +3,15 @@ import numpy as np
 from ai_learning import winrate
 
 
-def hora():
+# =====================================
+# HORA DE ENTRADA EXACTA
+# =====================================
+
+def hora_entrada():
+
     ahora = time.localtime()
-    return f"{ahora.tm_hour:02d}:{ahora.tm_min:02d}"
+
+    return f"{ahora.tm_hour:02d}:{ahora.tm_min:02d}:59"
 
 
 # =====================================
@@ -146,7 +152,6 @@ def vela_fuerte(v):
 
 def confirmacion_m5(conector, par):
 
-    # 🔧 SOLUCION ERROR EMA200
     velas = conector.api.get_candles(par, 300, 300, time.time())
 
     cierres = [v['close'] for v in velas]
@@ -164,12 +169,32 @@ def confirmacion_m5(conector, par):
 
 
 # =====================================
+# EXPIRACION AUTOMATICA
+# =====================================
+
+def calcular_expiracion(score):
+
+    if score >= 9:
+        return 5
+
+    if score == 8:
+        return 4
+
+    if score == 7:
+        return 3
+
+    if score == 6:
+        return 2
+
+    return 1
+
+
+# =====================================
 # ANALIZAR
 # =====================================
 
 def analizar(conector, par):
 
-    # 🔧 SOLUCION ERROR EMA
     velas = conector.api.get_candles(par, 60, 300, time.time())
 
     cierres = [v['close'] for v in velas]
@@ -212,10 +237,6 @@ def analizar(conector, par):
         score += 1
 
 
-    # =====================================
-    # IA ADAPTATIVA
-    # =====================================
-
     wr = winrate()
 
     if wr < 60:
@@ -230,13 +251,16 @@ def analizar(conector, par):
         return None
 
 
+    expiracion = calcular_expiracion(score)
+
+
     if (patron == "CALL" or sweep == "CALL" or bloque == "CALL") and tendencia == "CALL":
 
         return {
             "direccion": "CALL",
-            "probabilidad": 98,
-            "expiracion": 2,
-            "hora": hora(),
+            "probabilidad": 85 + score,
+            "expiracion": expiracion,
+            "hora": hora_entrada(),
             "score": score
         }
 
@@ -245,10 +269,10 @@ def analizar(conector, par):
 
         return {
             "direccion": "PUT",
-            "probabilidad": 98,
-            "expiracion": 2,
-            "hora": hora(),
+            "probabilidad": 85 + score,
+            "expiracion": expiracion,
+            "hora": hora_entrada(),
             "score": score
         }
 
-    return None 
+    return None
