@@ -3,7 +3,7 @@ import numpy as np
 
 
 # =====================================
-# HORA DE ENTRADA
+# HORA
 # =====================================
 
 def hora_entrada():
@@ -37,61 +37,26 @@ def ema(data, period):
 
 def soporte_resistencia(velas):
 
-    highs = [v['max'] for v in velas[-40:]]
-    lows = [v['min'] for v in velas[-40:]]
+    highs = [v['max'] for v in velas[-30:]]
+    lows = [v['min'] for v in velas[-30:]]
 
-    resistencia = max(highs)
-    soporte = min(lows)
-
-    return soporte, resistencia
-
-
-# =====================================
-# ESTRUCTURA DEL MERCADO
-# =====================================
-
-def estructura(velas):
-
-    highs = [v['max'] for v in velas[-6:]]
-    lows = [v['min'] for v in velas[-6:]]
-
-    if highs[-1] > highs[-2] and lows[-1] > lows[-2]:
-        return "alcista"
-
-    if highs[-1] < highs[-2] and lows[-1] < lows[-2]:
-        return "bajista"
-
-    return "lateral"
+    return min(lows), max(highs)
 
 
 # =====================================
 # FUERZA DE VELA
 # =====================================
 
-def fuerza_vela(v):
+def vela_fuerte(v):
 
     cuerpo = abs(v['close'] - v['open'])
+
     rango = v['max'] - v['min']
 
     if rango == 0:
         return False
 
     return cuerpo / rango > 0.6
-
-
-# =====================================
-# VELA IMPULSO
-# =====================================
-
-def vela_impulso(v):
-
-    cuerpo = abs(v['close'] - v['open'])
-    rango = v['max'] - v['min']
-
-    if rango == 0:
-        return False
-
-    return cuerpo / rango > 0.7
 
 
 # =====================================
@@ -114,7 +79,7 @@ def engulfing(v1, v2):
 
 
 # =====================================
-# PIN BAR
+# PINBAR
 # =====================================
 
 def pinbar_alcista(v):
@@ -136,63 +101,50 @@ def pinbar_bajista(v):
 
 
 # =====================================
-# CONFIRMACION MULTI TIMEFRAME
+# MERCADO LATERAL
 # =====================================
 
-def confirmacion_tf(conector, par, timeframe):
+def mercado_lateral(cierres):
 
-    velas = conector.api.get_candles(par, timeframe, 50, time.time())
+    volatilidad = np.std(cierres[-20:])
+
+    return volatilidad < 0.00005
+
+
+# =====================================
+# CONFIRMACION M5
+# =====================================
+
+def confirmacion_m5(conector, par):
+
+    velas = conector.api.get_candles(par, 300, 50, time.time())
 
     cierres = [v['close'] for v in velas]
 
-    ema20 = ema(cierres, 20)
+    ema50 = ema(cierres, 50)
 
-    if cierres[-1] > ema20[-1]:
+    ema200 = ema(cierres, 200)
+
+    if ema50[-1] > ema200[-1]:
         return "CALL"
 
-    if cierres[-1] < ema20[-1]:
+    if ema50[-1] < ema200[-1]:
         return "PUT"
 
     return None
 
 
 # =====================================
-# VOLUMEN
-# =====================================
-
-def volumen_fuerte(velas):
-
-    vol = [v.get("volume", 1) for v in velas[-10:]]
-
-    promedio = np.mean(vol)
-
-    return vol[-1] > promedio
-
-
-# =====================================
 # EXPIRACION
 # =====================================
 
-def expiracion(velas):
+def expiracion():
 
-    rango = velas[-1]['max'] - velas[-1]['min']
-
-    promedio = np.mean([v['max'] - v['min'] for v in velas[-10:]])
-
-    if rango > promedio * 2:
-        return 1
-
-    if rango > promedio * 1.5:
-        return 2
-
-    if rango > promedio:
-        return 3
-
-    return 4
+    return 5
 
 
 # =====================================
-# ESPERAR CIERRE DE VELA
+# ESPERAR CIERRE VELA
 # =====================================
 
 def esperar_cierre():
@@ -206,88 +158,84 @@ def esperar_cierre():
 
 
 # =====================================
-# ANALIZAR MERCADO
+# ANALIZAR
 # =====================================
 
 def analizar(conector, par):
 
     esperar_cierre()
 
-    velas = conector.api.get_candles(par, 60, 100, time.time())
+    velas = conector.api.get_candles(par, 60, 120, time.time())
+
+    cierres = [v['close'] for v in velas]
+
+    if mercado_lateral(cierres):
+        return None
 
     v1 = velas[-2]
     v2 = velas[-1]
 
     soporte, resistencia = soporte_resistencia(velas)
 
-    estr = estructura(velas)
+    ema50 = ema(cierres, 50)
+    ema200 = ema(cierres, 200)
 
-    exp = expiracion(velas)
+    tendencia_alcista = ema50[-1] > ema200[-1]
+    tendencia_bajista = ema50[-1] < ema200[-1]
+
+    patron = engulfing(v1, v2)
+
+    confirmacion_mayor = confirmacion_m5(conector, par)
 
     confirmaciones = 0
 
-    patron = engulfing(v1, v2)
+    if vela_fuerte(v2):
+        confirmaciones += 1
 
     if patron:
         confirmaciones += 1
 
-    if fuerza_vela(v2):
-        confirmaciones += 1
-
-    if vela_impulso(v2):
-        confirmaciones += 1
-
-    if volumen_fuerte(velas):
-        confirmaciones += 1
-
-    if estr != "lateral":
-        confirmaciones += 1
-
-
-    # Confirmación marcos mayores
-    tf5 = confirmacion_tf(conector, par, 300)
-    tf30 = confirmacion_tf(conector, par, 1800)
-
-    prob = confirmaciones * 25
-
-
-    # =====================================
+    # ======================
     # CALL
-    # =====================================
+    # ======================
 
-    if v2['min'] <= soporte * 1.002 and estr == "alcista":
+    if v2['min'] <= soporte * 1.002 and tendencia_alcista:
 
         if pinbar_alcista(v2) or patron == "CALL":
 
-            if tf5 == "CALL" and tf30 == "CALL":
+            if confirmacion_mayor == "CALL":
 
-                if prob >= 70:
+                confirmaciones += 2
+
+                if confirmaciones >= 3:
 
                     return {
                         "direccion": "CALL",
-                        "probabilidad": prob,
-                        "expiracion": exp,
+                        "probabilidad": 85,
+                        "expiracion": expiracion(),
                         "hora": hora_entrada()
                     }
 
 
-    # =====================================
+    # ======================
     # PUT
-    # =====================================
+    # ======================
 
-    if v2['max'] >= resistencia * 0.998 and estr == "bajista":
+    if v2['max'] >= resistencia * 0.998 and tendencia_bajista:
 
         if pinbar_bajista(v2) or patron == "PUT":
 
-            if tf5 == "PUT" and tf30 == "PUT":
+            if confirmacion_mayor == "PUT":
 
-                if prob >= 70:
+                confirmaciones += 2
+
+                if confirmaciones >= 3:
 
                     return {
                         "direccion": "PUT",
-                        "probabilidad": prob,
-                        "expiracion": exp,
+                        "probabilidad": 85,
+                        "expiracion": expiracion(),
                         "hora": hora_entrada()
                     }
 
-    return None
+    return None 
