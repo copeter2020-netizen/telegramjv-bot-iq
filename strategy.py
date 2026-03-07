@@ -1,9 +1,6 @@
 import time
 import numpy as np
 
-# =====================================
-# HORA
-# =====================================
 
 def hora_entrada():
 
@@ -11,10 +8,6 @@ def hora_entrada():
 
     return f"{ahora.tm_hour:02d}:{ahora.tm_min:02d}"
 
-
-# =====================================
-# EMA
-# =====================================
 
 def ema(data, period):
 
@@ -30,20 +23,12 @@ def ema(data, period):
     return a
 
 
-# =====================================
-# MERCADO LATERAL
-# =====================================
-
 def mercado_lateral(cierres):
 
     volatilidad = np.std(cierres[-20:])
 
     return volatilidad < 0.00005
 
-
-# =====================================
-# ENGULFING
-# =====================================
 
 def engulfing(v1, v2):
 
@@ -60,13 +45,9 @@ def engulfing(v1, v2):
     return None
 
 
-# =====================================
-# CONFIRMACION M5
-# =====================================
-
 def confirmacion_m5(conector, par):
 
-    velas = conector.api.get_candles(par, 300, 50, time.time())
+    velas = conector.api.get_candles(par, 300, 200, time.time())
 
     cierres = [v['close'] for v in velas]
 
@@ -82,13 +63,9 @@ def confirmacion_m5(conector, par):
     return None
 
 
-# =====================================
-# ANALIZAR
-# =====================================
-
 def analizar(conector, par):
 
-    velas = conector.api.get_candles(par, 60, 120, time.time())
+    velas = conector.api.get_candles(par, 60, 300, time.time())
 
     cierres = [v['close'] for v in velas]
 
@@ -120,4 +97,4 @@ def analizar(conector, par):
             "hora": hora_entrada()
         }
 
-    return None
+    return None 
