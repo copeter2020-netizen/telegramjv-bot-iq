@@ -1,19 +1,43 @@
  import requests
-import pandas as pd
 import time
+import requests
+import pandas as pd
 from datetime import datetime
 import ta
 
-TOKEN = "8651397125:AAHHpJQ6j0_GNQ8HCTBPtHgitD5zBrfgz84"
-CHAT_ID = "8651397125"
+from iqoptionapi.stable_api import IQ_Option
 
-API_KEY = "TU_API_KEY_TWELVEDATA"
+# =========================
+# CONFIGURACION
+# =========================
+
+IQ_EMAIL = "TU_EMAIL_IQOPTION"
+IQ_PASSWORD = "TU_PASSWORD_IQOPTION"
+
+TOKEN = "TU_TOKEN_TELEGRAM"
+CHAT_ID = "TU_CHAT_ID"
 
 PAIRS = [
-    "EUR/USD",
-    "GBP/USD",
-    "AUD/USD"
+    "EURUSD-OTC",
+    "GBPUSD-OTC",
+    "AUDCAD-OTC",
+    "EURGBP-OTC"
 ]
+
+# =========================
+# CONECTAR IQ OPTION
+# =========================
+
+print("Conectando a IQ Option...")
+
+Iq = IQ_Option(IQ_EMAIL, IQ_PASSWORD)
+Iq.connect()
+
+if Iq.check_connect():
+    print("Conectado correctamente")
+else:
+    print("Error conectando")
+    exit()
 
 # =========================
 # TELEGRAM
@@ -24,7 +48,7 @@ def send_signal(pair, direction):
     now = datetime.utcnow()
     entry = now.strftime("%H:%M:59")
 
-    msg = f"""
+    message = f"""
 🚨 MEJOR SEÑAL
 
 Par: {pair}
@@ -37,31 +61,24 @@ Expiración: 1 minuto
 
     requests.post(url, data={
         "chat_id": CHAT_ID,
-        "text": msg
+        "text": message
     })
 
 # =========================
-# OBTENER DATOS
+# OBTENER VELAS OTC
 # =========================
 
 def get_data(pair):
 
-    url = f"https://api.twelvedata.com/time_series?symbol={pair}&interval=1min&outputsize=200&apikey={API_KEY}"
+    candles = Iq.get_candles(pair, 60, 200, time.time())
 
-    r = requests.get(url)
-    data = r.json()
+    df = pd.DataFrame(candles)
 
-    if "values" not in data:
-        print("Error API:", data)
-        return None
+    df = df[["open","max","min","close"]]
 
-    df = pd.DataFrame(data["values"])
-
-    df = df[["open","high","low","close"]]
+    df.columns = ["open","high","low","close"]
 
     df = df.astype(float)
-
-    df = df[::-1]
 
     return df
 
@@ -73,7 +90,7 @@ def analyze(pair):
 
     df = get_data(pair)
 
-    if df is None:
+    if len(df) < 50:
         return
 
     df["rsi"] = ta.momentum.RSIIndicator(df["close"],14).rsi()
@@ -85,21 +102,29 @@ def analyze(pair):
 
     last = df.iloc[-1]
 
-    body = abs(last["close"] - last["open"])
+    open_price = last["open"]
+    close_price = last["close"]
+    high_price = last["high"]
+    low_price = last["low"]
 
-    wick_up = last["high"] - max(last["close"], last["open"])
+    body = abs(close_price - open_price)
 
-    wick_down = min(last["close"], last["open"]) - last["low"]
+    wick_up = high_price - max(close_price, open_price)
+    wick_down = min(close_price, open_price) - low_price
 
     # CALL
-    if last["close"] < last["bb_low"] and last["rsi"] < 30 and wick_down > body:
+    if close_price < last["bb_low"] and last["rsi"] < 30 and wick_down > body:
         send_signal(pair,"CALL")
 
     # PUT
-    if last["close"] > last["bb_high"] and last["rsi"] > 70 and wick_up > body:
+    if close_price > last["bb_high"] and last["rsi"] > 70 and wick_up > body:
         send_signal(pair,"PUT")
 
-print("BOT DE SEÑALES INICIADO")
+# =========================
+# LOOP
+# =========================
+
+print("BOT OTC INICIADO")
 
 while True:
 
@@ -114,5 +139,4 @@ while True:
     except Exception as e:
 
         print("Error:", e)
-
-        time.sleep(60)      
+        time.sleep(60) 
