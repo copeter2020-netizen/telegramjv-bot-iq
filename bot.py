@@ -3,22 +3,13 @@ import requests
 import pandas as pd
 from datetime import datetime
 import ta
-
 from iqoptionapi.stable_api import IQ_Option
 
-# =========================
-# CONFIGURACION
-# =========================
-
-IQ_EMAIL = "TU_EMAIL_IQOPTION"
-IQ_PASSWORD = "TU_PASSWORD_IQOPTION"
+IQ_EMAIL = "TU_EMAIL"
+IQ_PASSWORD = "TU_PASSWORD"
 
 TOKEN = "TU_TOKEN_TELEGRAM"
 CHAT_ID = "TU_CHAT_ID"
-
-# =========================
-# CONECTAR IQ OPTION
-# =========================
 
 print("Conectando a IQ Option...")
 
@@ -26,19 +17,15 @@ Iq = IQ_Option(IQ_EMAIL, IQ_PASSWORD)
 Iq.connect()
 
 if Iq.check_connect():
-    print("Conectado correctamente")
+    print("Conectado a IQ Option")
 else:
-    print("Error conectando")
+    print("Error de conexión")
     exit()
 
-# =========================
-# TELEGRAM
-# =========================
 
 def send_signal(pair, direction):
 
-    now = datetime.utcnow()
-    entry = now.strftime("%H:%M:59")
+    entry = datetime.utcnow().strftime("%H:%M:59")
 
     message = f"""
 🚨 MEJOR SEÑAL
@@ -56,29 +43,23 @@ Expiración: 1 minuto
         "text": message
     })
 
-# =========================
-# OBTENER PARES OTC ACTIVOS
-# =========================
 
 def get_otc_pairs():
 
     pairs = []
 
-    all_assets = Iq.get_all_open_time()
+    assets = Iq.get_all_open_time()
 
-    for asset in all_assets["digital"]:
+    for asset in assets["digital"]:
 
         if "OTC" in asset:
 
-            if all_assets["digital"][asset]["open"]:
+            if assets["digital"][asset]["open"]:
 
                 pairs.append(asset)
 
     return pairs
 
-# =========================
-# OBTENER VELAS
-# =========================
 
 def get_data(pair):
 
@@ -94,9 +75,6 @@ def get_data(pair):
 
     return df
 
-# =========================
-# ANALISIS
-# =========================
 
 def analyze(pair):
 
@@ -114,29 +92,20 @@ def analyze(pair):
 
     last = df.iloc[-1]
 
-    open_price = last["open"]
-    close_price = last["close"]
-    high_price = last["high"]
-    low_price = last["low"]
+    body = abs(last["close"] - last["open"])
 
-    body = abs(close_price - open_price)
+    wick_up = last["high"] - max(last["close"], last["open"])
 
-    wick_up = high_price - max(close_price, open_price)
-    wick_down = min(close_price, open_price) - low_price
+    wick_down = min(last["close"], last["open"]) - last["low"]
 
-    # CALL
-    if close_price < last["bb_low"] and last["rsi"] < 30 and wick_down > body:
+    if last["close"] < last["bb_low"] and last["rsi"] < 30 and wick_down > body:
 
         send_signal(pair,"CALL")
 
-    # PUT
-    if close_price > last["bb_high"] and last["rsi"] > 70 and wick_up > body:
+    if last["close"] > last["bb_high"] and last["rsi"] > 70 and wick_up > body:
 
         send_signal(pair,"PUT")
 
-# =========================
-# LOOP PRINCIPAL
-# =========================
 
 print("BOT OTC INICIADO")
 
@@ -146,7 +115,7 @@ while True:
 
         pairs = get_otc_pairs()
 
-        print("Pares OTC activos:", pairs)
+        print("Pares activos:", pairs)
 
         for pair in pairs:
 
@@ -157,4 +126,5 @@ while True:
     except Exception as e:
 
         print("Error:", e)
-        time.sleep(60)
+
+        time.sleep(60) 
