@@ -1,5 +1,5 @@
-iqoptionapi
-pandas
 requests
+pandas
 ta
-websocket-client 
+websocket-client
+iqoptionapi 
