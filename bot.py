@@ -1,145 +1,71 @@
-import time
 import requests
 import pandas as pd
+import time
 from datetime import datetime
 import ta
 
-# =========================
-# CONFIGURACION
-# =========================
-
-TELEGRAM_TOKEN = "TU_TOKEN_TELEGRAM"
+TOKEN = "TU_TOKEN_DE_TELEGRAM"
 CHAT_ID = "TU_CHAT_ID"
 
-API_KEY = "TU_API_KEY_TWELVEDATA"
+PAIR = "EURUSD"
 
-PAIRS = [
-    "EUR/USD",
-    "GBP/USD",
-    "AUD/USD",
-    "USD/CAD",
-    "EUR/JPY"
-]
+def send_signal(pair, direction, prob, score):
+    now = datetime.utcnow()
+    entry_time = now.strftime("%H:%M:59")
 
-# =========================
-# TELEGRAM
-# =========================
-
-def send_signal(pair, direction):
-
-    hora = datetime.utcnow().strftime("%H:%M:59")
-
-    mensaje = f"""
+    message = f"""
 🚨 MEJOR SEÑAL
 
 Par: {pair}-OTC
-Hora: {hora}
+Hora: {entry_time}
 Dirección: {direction}
+Probabilidad: {prob}%
 Expiración: 1 minuto
+Score: {score}
 """
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-
-    try:
-
-        requests.post(url,data={
-            "chat_id":CHAT_ID,
-            "text":mensaje
-        })
-
-    except:
-
-        print("Error enviando señal")
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": message})
 
 
-# =========================
-# DATOS DE MERCADO
-# =========================
+def get_data():
+    url = f"https://api.binance.com/api/v3/klines?symbol={PAIR}&interval=1m&limit=100"
+    data = requests.get(url).json()
 
-def get_data(pair):
-
-    url = f"https://api.twelvedata.com/time_series?symbol={pair}&interval=1min&outputsize=200&apikey={API_KEY}"
-
-    r = requests.get(url)
-
-    data = r.json()
-
-    if "values" not in data:
-
-        print("Error API:",data)
-
-        return None
-
-    df = pd.DataFrame(data["values"])
-
-    df = df[["open","high","low","close"]]
-
+    df = pd.DataFrame(data)
+    df = df[[1,2,3,4]]
+    df.columns = ["open","high","low","close"]
     df = df.astype(float)
-
-    df = df[::-1]
 
     return df
 
 
-# =========================
-# ANALISIS
-# =========================
-
-def analyze(pair):
-
-    df = get_data(pair)
-
-    if df is None:
-
-        return
+def analyze():
+    df = get_data()
 
     df["rsi"] = ta.momentum.RSIIndicator(df["close"],14).rsi()
-
-    bb = ta.volatility.BollingerBands(df["close"],20)
+    bb = ta.volatility.BollingerBands(df["close"],20,2)
 
     df["bb_high"] = bb.bollinger_hband()
-
     df["bb_low"] = bb.bollinger_lband()
+
+    ema = ta.trend.EMAIndicator(df["close"],50)
+    df["ema"] = ema.ema_indicator()
 
     last = df.iloc[-1]
 
-    body = abs(last["close"] - last["open"])
+    if last["close"] < last["bb_low"] and last["rsi"] < 30:
+        send_signal(PAIR,"CALL",92,8)
 
-    wick_up = last["high"] - max(last["close"],last["open"])
+    if last["close"] > last["bb_high"] and last["rsi"] > 70:
+        send_signal(PAIR,"PUT",92,8)
 
-    wick_down = min(last["close"],last["open"]) - last["low"]
-
-    # CALL
-
-    if last["close"] < last["bb_low"] and last["rsi"] < 30 and wick_down > body:
-
-        send_signal(pair,"CALL")
-
-    # PUT
-
-    if last["close"] > last["bb_high"] and last["rsi"] > 70 and wick_up > body:
-
-        send_signal(pair,"PUT")
-
-
-# =========================
-# LOOP PRINCIPAL
-# =========================
-
-print("BOT DE SEÑALES INICIADO")
 
 while True:
-
     try:
-
-        for pair in PAIRS:
-
-            analyze(pair)
-
+        analyze()
         time.sleep(60)
 
     except Exception as e:
-
-        print("Error:",e)
-
+        print(e)
         time.sleep(60) 
