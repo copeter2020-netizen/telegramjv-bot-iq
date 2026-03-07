@@ -2,3 +2,4 @@ pyTelegramBotAPI
 pandas
 numpy
 git+https://github.com/iqoptionapi/iqoptionapi.git
+flask
