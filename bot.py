@@ -22,23 +22,10 @@ CHAT_ID = None
 ULTIMA_OPERACION = 0
 
 # =====================================
-# CONECTAR IQ OPTION
+# PARES A ANALIZAR
 # =====================================
 
-def conectar_iq():
-
-    if conector.conectar():
-        print("✅ Conectado a IQ Option")
-    else:
-        print("❌ Error conexión IQ")
-
-conectar_iq()
-
-# =====================================
-# PARES OTC
-# =====================================
-
-PARES_OTC = {
+PARES = {
 
 "EURUSD": "EURUSD-OTC",
 "GBPUSD": "GBPUSD-OTC",
@@ -48,23 +35,22 @@ PARES_OTC = {
 }
 
 # =====================================
-# COMANDO /comenzar
+# CONECTAR IQ OPTION
 # =====================================
 
-@bot.message_handler(commands=['comenzar'])
-def comenzar(m):
+def conectar():
 
-    texto = (
-        "🤖 BOT OTC ACTIVO\n\n"
-        "/auto → activar señales\n"
-        "/stop → detener señales\n\n"
-        "El bot enviará señales cada 2 minutos."
-    )
+    if conector.conectar():
+        print("✅ Conectado a IQ Option")
 
-    bot.reply_to(m, texto)
+    else:
+        print("❌ Error conexión IQ")
+
+
+conectar()
 
 # =====================================
-# AUTO
+# COMANDO AUTO
 # =====================================
 
 @bot.message_handler(commands=['auto'])
@@ -75,10 +61,11 @@ def auto(m):
     AUTO = True
     CHAT_ID = m.chat.id
 
-    bot.reply_to(m, "🚀 Señales automáticas activadas")
+    bot.reply_to(m, "🚀 Bot activado")
+
 
 # =====================================
-# STOP
+# COMANDO STOP
 # =====================================
 
 @bot.message_handler(commands=['stop'])
@@ -88,10 +75,11 @@ def stop(m):
 
     AUTO = False
 
-    bot.reply_to(m, "⛔ Señales detenidas")
+    bot.reply_to(m, "⛔ Bot detenido")
+
 
 # =====================================
-# SEÑALES AUTOMÁTICAS
+# ANALISIS AUTOMATICO
 # =====================================
 
 def auto_signals():
@@ -103,10 +91,13 @@ def auto_signals():
 
         if AUTO and CHAT_ID:
 
-            for par in PARES_OTC.values():
+            mejor_par = None
+            mejor_resultado = None
+            mejor_score = 0
 
-                if time.time() - ULTIMA_OPERACION < 120:
-                    continue
+            print("🔎 Analizando mercado...")
+
+            for par in PARES.values():
 
                 try:
 
@@ -114,26 +105,40 @@ def auto_signals():
 
                     if resultado:
 
-                        mensaje = (
-                            "🚨 SEÑAL OTC\n\n"
-                            f"Par: {par}\n"
-                            f"Hora: {resultado['hora']}\n"
-                            f"Dirección: {resultado['direccion']}\n"
-                            f"Probabilidad: {resultado['probabilidad']}%\n"
-                            f"Expiración: {resultado['expiracion']} minutos"
-                        )
+                        score = resultado["score"]
 
-                        bot.send_message(CHAT_ID, mensaje)
+                        if score > mejor_score:
 
-                        ULTIMA_OPERACION = time.time()
-
-                        print("Señal enviada:", par)
+                            mejor_score = score
+                            mejor_par = par
+                            mejor_resultado = resultado
 
                 except Exception as e:
 
                     print("Error analizando", par, e)
 
+            if mejor_resultado:
+
+                if time.time() - ULTIMA_OPERACION > 120:
+
+                    mensaje = (
+                        "🚨 MEJOR SEÑAL DEL MERCADO\n\n"
+                        f"Par: {mejor_par}\n"
+                        f"Hora: {mejor_resultado['hora']}\n"
+                        f"Dirección: {mejor_resultado['direccion']}\n"
+                        f"Probabilidad: {mejor_resultado['probabilidad']}%\n"
+                        f"Expiración: {mejor_resultado['expiracion']} minutos\n"
+                        f"Score: {mejor_resultado['score']}"
+                    )
+
+                    bot.send_message(CHAT_ID, mensaje)
+
+                    ULTIMA_OPERACION = time.time()
+
+                    print("✅ Señal enviada:", mejor_par)
+
         time.sleep(10)
+
 
 # =====================================
 # INICIAR BOT
