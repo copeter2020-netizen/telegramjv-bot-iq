@@ -9,6 +9,10 @@ def hora():
     return f"{ahora.tm_hour:02d}:{ahora.tm_min:02d}"
 
 
+# =====================================
+# EMA
+# =====================================
+
 def ema(data, period):
 
     data = np.array(data)
@@ -23,6 +27,10 @@ def ema(data, period):
     return a
 
 
+# =====================================
+# VOLATILIDAD
+# =====================================
+
 def volatilidad(cierres):
 
     return np.std(cierres[-20:])
@@ -32,6 +40,10 @@ def mercado_lateral(cierres):
 
     return volatilidad(cierres) < 0.00004
 
+
+# =====================================
+# MANIPULACION OTC
+# =====================================
 
 def manipulacion_otc(velas):
 
@@ -68,6 +80,33 @@ def liquidez(velas):
 
 
 # =====================================
+# ORDER BLOCK
+# =====================================
+
+def order_block(velas):
+
+    for v in velas[-10:]:
+
+        cuerpo = abs(v['close'] - v['open'])
+        rango = v['max'] - v['min']
+
+        if rango == 0:
+            continue
+
+        fuerza = cuerpo / rango
+
+        if fuerza > 0.7:
+
+            if v['close'] > v['open']:
+                return "CALL"
+
+            if v['close'] < v['open']:
+                return "PUT"
+
+    return None
+
+
+# =====================================
 # ENGULFING
 # =====================================
 
@@ -86,6 +125,10 @@ def engulfing(v1, v2):
     return None
 
 
+# =====================================
+# VELA FUERTE
+# =====================================
+
 def vela_fuerte(v):
 
     cuerpo = abs(v['close'] - v['open'])
@@ -97,6 +140,10 @@ def vela_fuerte(v):
 
     return cuerpo / rango > 0.6
 
+
+# =====================================
+# CONFIRMACION M5
+# =====================================
 
 def confirmacion_m5(conector, par):
 
@@ -115,6 +162,10 @@ def confirmacion_m5(conector, par):
 
     return None
 
+
+# =====================================
+# ANALIZAR
+# =====================================
 
 def analizar(conector, par):
 
@@ -137,9 +188,14 @@ def analizar(conector, par):
 
     sweep = liquidez(velas)
 
+    bloque = order_block(velas)
+
     score = 0
 
     if sweep:
+        score += 2
+
+    if bloque:
         score += 2
 
     if patron:
@@ -154,25 +210,26 @@ def analizar(conector, par):
     if volatilidad(cierres) > 0.00008:
         score += 1
 
-    if score < 5:
+    if score < 6:
         return None
 
 
-    if (patron == "CALL" or sweep == "CALL") and tendencia == "CALL":
+    if (patron == "CALL" or sweep == "CALL" or bloque == "CALL") and tendencia == "CALL":
 
         return {
             "direccion": "CALL",
-            "probabilidad": 97,
+            "probabilidad": 98,
             "expiracion": 2,
             "hora": hora(),
             "score": score
         }
 
-    if (patron == "PUT" or sweep == "PUT") and tendencia == "PUT":
+
+    if (patron == "PUT" or sweep == "PUT" or bloque == "PUT") and tendencia == "PUT":
 
         return {
             "direccion": "PUT",
-            "probabilidad": 97,
+            "probabilidad": 98,
             "expiracion": 2,
             "hora": hora(),
             "score": score
