@@ -2,7 +2,7 @@ import time
 import numpy as np
 
 
-def hora_entrada():
+def hora():
 
     ahora = time.localtime()
 
@@ -23,12 +23,53 @@ def ema(data, period):
     return a
 
 
+def volatilidad(cierres):
+
+    return np.std(cierres[-20:])
+
+
 def mercado_lateral(cierres):
 
-    volatilidad = np.std(cierres[-20:])
+    return volatilidad(cierres) < 0.00004
 
-    return volatilidad < 0.00005
 
+def manipulacion_otc(velas):
+
+    rangos = [v['max'] - v['min'] for v in velas[-10:]]
+
+    media = np.mean(rangos)
+
+    ultima = velas[-1]['max'] - velas[-1]['min']
+
+    return ultima > media * 3
+
+
+# =====================================
+# LIQUIDITY SWEEP
+# =====================================
+
+def liquidez(velas):
+
+    highs = [v['max'] for v in velas[-20:]]
+    lows = [v['min'] for v in velas[-20:]]
+
+    maximo = max(highs)
+    minimo = min(lows)
+
+    ultima = velas[-1]
+
+    if ultima['max'] > maximo:
+        return "PUT"
+
+    if ultima['min'] < minimo:
+        return "CALL"
+
+    return None
+
+
+# =====================================
+# ENGULFING
+# =====================================
 
 def engulfing(v1, v2):
 
@@ -43,6 +84,18 @@ def engulfing(v1, v2):
             return "PUT"
 
     return None
+
+
+def vela_fuerte(v):
+
+    cuerpo = abs(v['close'] - v['open'])
+
+    rango = v['max'] - v['min']
+
+    if rango == 0:
+        return False
+
+    return cuerpo / rango > 0.6
 
 
 def confirmacion_m5(conector, par):
@@ -72,29 +125,57 @@ def analizar(conector, par):
     if mercado_lateral(cierres):
         return None
 
+    if manipulacion_otc(velas):
+        return None
+
     v1 = velas[-2]
     v2 = velas[-1]
 
     patron = engulfing(v1, v2)
 
-    confirmacion = confirmacion_m5(conector, par)
+    tendencia = confirmacion_m5(conector, par)
 
-    if patron == "CALL" and confirmacion == "CALL":
+    sweep = liquidez(velas)
+
+    score = 0
+
+    if sweep:
+        score += 2
+
+    if patron:
+        score += 2
+
+    if tendencia:
+        score += 2
+
+    if vela_fuerte(v2):
+        score += 1
+
+    if volatilidad(cierres) > 0.00008:
+        score += 1
+
+    if score < 5:
+        return None
+
+
+    if (patron == "CALL" or sweep == "CALL") and tendencia == "CALL":
 
         return {
             "direccion": "CALL",
-            "probabilidad": 86,
+            "probabilidad": 97,
             "expiracion": 2,
-            "hora": hora_entrada()
+            "hora": hora(),
+            "score": score
         }
 
-    if patron == "PUT" and confirmacion == "PUT":
+    if (patron == "PUT" or sweep == "PUT") and tendencia == "PUT":
 
         return {
             "direccion": "PUT",
-            "probabilidad": 86,
+            "probabilidad": 97,
             "expiracion": 2,
-            "hora": hora_entrada()
+            "hora": hora(),
+            "score": score
         }
 
     return None 
