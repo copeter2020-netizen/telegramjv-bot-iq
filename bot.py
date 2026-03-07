@@ -5,23 +5,55 @@ from datetime import datetime
 import ta
 from iqoptionapi.stable_api import IQ_Option
 
+# =========================
+# CONFIGURACION
+# =========================
+
 IQ_EMAIL = "TU_EMAIL"
 IQ_PASSWORD = "TU_PASSWORD"
 
 TOKEN = "TU_TOKEN_TELEGRAM"
 CHAT_ID = "TU_CHAT_ID"
 
-print("Conectando a IQ Option...")
+# =========================
+# CONECTAR IQ OPTION
+# =========================
 
-Iq = IQ_Option(IQ_EMAIL, IQ_PASSWORD)
-Iq.connect()
+def connect_iq():
 
-if Iq.check_connect():
-    print("Conectado a IQ Option")
-else:
-    print("Error de conexión")
-    exit()
+    while True:
 
+        try:
+
+            print("Conectando a IQ Option...")
+
+            iq = IQ_Option(IQ_EMAIL, IQ_PASSWORD)
+
+            iq.connect()
+
+            if iq.check_connect():
+
+                print("Conectado correctamente")
+
+                return iq
+
+            else:
+
+                print("Error de conexión, reintentando...")
+
+                time.sleep(10)
+
+        except Exception as e:
+
+            print("Error:", e)
+
+            time.sleep(10)
+
+Iq = connect_iq()
+
+# =========================
+# TELEGRAM
+# =========================
 
 def send_signal(pair, direction):
 
@@ -38,11 +70,20 @@ Expiración: 1 minuto
 
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-    requests.post(url, data={
-        "chat_id": CHAT_ID,
-        "text": message
-    })
+    try:
 
+        requests.post(url, data={
+            "chat_id": CHAT_ID,
+            "text": message
+        })
+
+    except:
+
+        print("Error enviando señal")
+
+# =========================
+# OBTENER PARES OTC
+# =========================
 
 def get_otc_pairs():
 
@@ -60,6 +101,9 @@ def get_otc_pairs():
 
     return pairs
 
+# =========================
+# OBTENER VELAS
+# =========================
 
 def get_data(pair):
 
@@ -75,6 +119,9 @@ def get_data(pair):
 
     return df
 
+# =========================
+# ANALISIS
+# =========================
 
 def analyze(pair):
 
@@ -98,14 +145,21 @@ def analyze(pair):
 
     wick_down = min(last["close"], last["open"]) - last["low"]
 
+    # CALL
+
     if last["close"] < last["bb_low"] and last["rsi"] < 30 and wick_down > body:
 
         send_signal(pair,"CALL")
+
+    # PUT
 
     if last["close"] > last["bb_high"] and last["rsi"] > 70 and wick_up > body:
 
         send_signal(pair,"PUT")
 
+# =========================
+# LOOP
+# =========================
 
 print("BOT OTC INICIADO")
 
@@ -115,7 +169,7 @@ while True:
 
         pairs = get_otc_pairs()
 
-        print("Pares activos:", pairs)
+        print("Pares OTC activos:", pairs)
 
         for pair in pairs:
 
@@ -127,4 +181,4 @@ while True:
 
         print("Error:", e)
 
-        time.sleep(60) 
+        time.sleep(10) 
