@@ -1,22 +1,18 @@
-import requests
+ import requests
 import pandas as pd
 import time
 from datetime import datetime
 import ta
 
-# =========================
-# CONFIGURACIÓN
-# =========================
-
 TOKEN = "8651397125:AAHHpJQ6j0_GNQ8HCTBPtHgitD5zBrfgz84"
 CHAT_ID = "8651397125"
 
+API_KEY = "TU_API_KEY_TWELVEDATA"
+
 PAIRS = [
-    "BTCUSDT",
-    "ETHUSDT",
-    "BNBUSDT",
-    "SOLUSDT",
-    "ADAUSDT"
+    "EUR/USD",
+    "GBP/USD",
+    "AUD/USD"
 ]
 
 # =========================
@@ -28,7 +24,7 @@ def send_signal(pair, direction):
     now = datetime.utcnow()
     entry = now.strftime("%H:%M:59")
 
-    message = f"""
+    msg = f"""
 🚨 MEJOR SEÑAL
 
 Par: {pair}
@@ -39,13 +35,10 @@ Expiración: 1 minuto
 
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-    try:
-        requests.post(url, data={
-            "chat_id": CHAT_ID,
-            "text": message
-        })
-    except:
-        print("Error enviando señal")
+    requests.post(url, data={
+        "chat_id": CHAT_ID,
+        "text": msg
+    })
 
 # =========================
 # OBTENER DATOS
@@ -53,48 +46,27 @@ Expiración: 1 minuto
 
 def get_data(pair):
 
-    url = f"https://api.binance.com/api/v3/klines?symbol={pair}&interval=1m&limit=200"
+    url = f"https://api.twelvedata.com/time_series?symbol={pair}&interval=1min&outputsize=200&apikey={API_KEY}"
 
-    try:
+    r = requests.get(url)
+    data = r.json()
 
-        response = requests.get(url, timeout=10)
-
-        data = response.json()
-
-        if not isinstance(data, list):
-            print("Error API:", data)
-            return None
-
-        df = pd.DataFrame(data)
-
-        if df.empty:
-            return None
-
-        df = df.iloc[:,0:6]
-
-        df.columns = [
-            "time",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume"
-        ]
-
-        df = df[["open","high","low","close"]]
-
-        df = df.astype(float)
-
-        return df
-
-    except Exception as e:
-
-        print("Error obteniendo datos:", e)
-
+    if "values" not in data:
+        print("Error API:", data)
         return None
 
+    df = pd.DataFrame(data["values"])
+
+    df = df[["open","high","low","close"]]
+
+    df = df.astype(float)
+
+    df = df[::-1]
+
+    return df
+
 # =========================
-# ANALISIS DEL MERCADO
+# ANALISIS
 # =========================
 
 def analyze(pair):
@@ -104,66 +76,28 @@ def analyze(pair):
     if df is None:
         return
 
-    if len(df) < 50:
-        return
+    df["rsi"] = ta.momentum.RSIIndicator(df["close"],14).rsi()
 
-    try:
+    bb = ta.volatility.BollingerBands(df["close"],20)
 
-        df["rsi"] = ta.momentum.RSIIndicator(df["close"],14).rsi()
+    df["bb_high"] = bb.bollinger_hband()
+    df["bb_low"] = bb.bollinger_lband()
 
-        bb = ta.volatility.BollingerBands(df["close"],20)
+    last = df.iloc[-1]
 
-        df["bb_high"] = bb.bollinger_hband()
-        df["bb_low"] = bb.bollinger_lband()
+    body = abs(last["close"] - last["open"])
 
-        ema = ta.trend.EMAIndicator(df["close"],50)
+    wick_up = last["high"] - max(last["close"], last["open"])
 
-        df["ema"] = ema.ema_indicator()
+    wick_down = min(last["close"], last["open"]) - last["low"]
 
-        last = df.iloc[-1]
+    # CALL
+    if last["close"] < last["bb_low"] and last["rsi"] < 30 and wick_down > body:
+        send_signal(pair,"CALL")
 
-        open_price = last["open"]
-        close_price = last["close"]
-        high_price = last["high"]
-        low_price = last["low"]
-
-        body = abs(close_price - open_price)
-
-        wick_up = high_price - max(close_price, open_price)
-
-        wick_down = min(close_price, open_price) - low_price
-
-        # ======================
-        # SEÑAL CALL
-        # ======================
-
-        if (
-            close_price < last["bb_low"]
-            and last["rsi"] < 30
-            and wick_down > body
-        ):
-
-            send_signal(pair, "CALL")
-
-        # ======================
-        # SEÑAL PUT
-        # ======================
-
-        if (
-            close_price > last["bb_high"]
-            and last["rsi"] > 70
-            and wick_up > body
-        ):
-
-            send_signal(pair, "PUT")
-
-    except Exception as e:
-
-        print("Error en análisis:", e)
-
-# =========================
-# LOOP PRINCIPAL
-# =========================
+    # PUT
+    if last["close"] > last["bb_high"] and last["rsi"] > 70 and wick_up > body:
+        send_signal(pair,"PUT")
 
 print("BOT DE SEÑALES INICIADO")
 
@@ -179,6 +113,6 @@ while True:
 
     except Exception as e:
 
-        print("Error general:", e)
+        print("Error:", e)
 
-        time.sleep(60) 
+        time.sleep(60)      
