@@ -5,21 +5,21 @@ from datetime import datetime
 import ta
 from iqoptionapi.stable_api import IQ_Option
 
-# =========================
+# =============================
 # CONFIGURACION
-# =========================
+# =============================
 
 IQ_EMAIL = "TU_EMAIL"
 IQ_PASSWORD = "TU_PASSWORD"
 
-TOKEN = "TU_TOKEN_TELEGRAM"
+TELEGRAM_TOKEN = "TU_TOKEN"
 CHAT_ID = "TU_CHAT_ID"
 
-# =========================
-# CONECTAR IQ OPTION
-# =========================
+# =============================
+# CONEXION IQ OPTION
+# =============================
 
-def connect_iq():
+def conectar_iq():
 
     while True:
 
@@ -31,85 +31,85 @@ def connect_iq():
 
             iq.connect()
 
+            time.sleep(5)
+
             if iq.check_connect():
 
-                print("Conectado correctamente")
+                print("Conexion exitosa")
+
+                iq.change_balance("PRACTICE")
 
                 return iq
 
             else:
 
-                print("Error de conexión, reintentando...")
-
-                time.sleep(10)
+                print("Error de conexion, reintentando...")
 
         except Exception as e:
 
             print("Error:", e)
 
-            time.sleep(10)
+        time.sleep(10)
 
-Iq = connect_iq()
 
-# =========================
+Iq = conectar_iq()
+
+# =============================
 # TELEGRAM
-# =========================
+# =============================
 
-def send_signal(pair, direction):
+def enviar_senal(par, direccion):
 
-    entry = datetime.utcnow().strftime("%H:%M:59")
+    hora = datetime.utcnow().strftime("%H:%M:59")
 
-    message = f"""
+    mensaje = f"""
 🚨 MEJOR SEÑAL
 
-Par: {pair}
-Hora: {entry}
-Dirección: {direction}
+Par: {par}
+Hora: {hora}
+Dirección: {direccion}
 Expiración: 1 minuto
 """
 
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
     try:
 
-        requests.post(url, data={
-            "chat_id": CHAT_ID,
-            "text": message
-        })
+        requests.post(url,data={"chat_id":CHAT_ID,"text":mensaje})
 
     except:
 
-        print("Error enviando señal")
+        print("Error enviando mensaje")
 
-# =========================
+
+# =============================
 # OBTENER PARES OTC
-# =========================
+# =============================
 
-def get_otc_pairs():
+def obtener_pares_otc():
 
-    pairs = []
+    pares = []
 
-    assets = Iq.get_all_open_time()
+    activos = Iq.get_all_open_time()
 
-    for asset in assets["digital"]:
+    for activo in activos["digital"]:
 
-        if "OTC" in asset:
+        if "OTC" in activo and activos["digital"][activo]["open"]:
 
-            if assets["digital"][asset]["open"]:
+            pares.append(activo)
 
-                pairs.append(asset)
+    return pares
 
-    return pairs
 
-# =========================
+# =============================
 # OBTENER VELAS
-# =========================
+# =============================
 
-def get_data(pair):
+def obtener_velas(par):
 
-    candles = Iq.get_candles(pair, 60, 200, time.time())
+    velas = Iq.get_candles(par,60,200,time.time())
 
-    df = pd.DataFrame(candles)
+    df = pd.DataFrame(velas)
 
     df = df[["open","max","min","close"]]
 
@@ -119,13 +119,14 @@ def get_data(pair):
 
     return df
 
-# =========================
+
+# =============================
 # ANALISIS
-# =========================
+# =============================
 
-def analyze(pair):
+def analizar(par):
 
-    df = get_data(pair)
+    df = obtener_velas(par)
 
     if len(df) < 50:
         return
@@ -135,31 +136,33 @@ def analyze(pair):
     bb = ta.volatility.BollingerBands(df["close"],20)
 
     df["bb_high"] = bb.bollinger_hband()
+
     df["bb_low"] = bb.bollinger_lband()
 
-    last = df.iloc[-1]
+    ultima = df.iloc[-1]
 
-    body = abs(last["close"] - last["open"])
+    cuerpo = abs(ultima["close"] - ultima["open"])
 
-    wick_up = last["high"] - max(last["close"], last["open"])
+    mecha_arriba = ultima["high"] - max(ultima["close"],ultima["open"])
 
-    wick_down = min(last["close"], last["open"]) - last["low"]
+    mecha_abajo = min(ultima["close"],ultima["open"]) - ultima["low"]
 
     # CALL
 
-    if last["close"] < last["bb_low"] and last["rsi"] < 30 and wick_down > body:
+    if ultima["close"] < ultima["bb_low"] and ultima["rsi"] < 30 and mecha_abajo > cuerpo:
 
-        send_signal(pair,"CALL")
+        enviar_senal(par,"CALL")
 
     # PUT
 
-    if last["close"] > last["bb_high"] and last["rsi"] > 70 and wick_up > body:
+    if ultima["close"] > ultima["bb_high"] and ultima["rsi"] > 70 and mecha_arriba > cuerpo:
 
-        send_signal(pair,"PUT")
+        enviar_senal(par,"PUT")
 
-# =========================
-# LOOP
-# =========================
+
+# =============================
+# LOOP PRINCIPAL
+# =============================
 
 print("BOT OTC INICIADO")
 
@@ -167,18 +170,20 @@ while True:
 
     try:
 
-        pairs = get_otc_pairs()
+        pares = obtener_pares_otc()
 
-        print("Pares OTC activos:", pairs)
+        print("Pares OTC activos:", pares)
 
-        for pair in pairs:
+        for par in pares:
 
-            analyze(pair)
+            analizar(par)
 
         time.sleep(60)
 
     except Exception as e:
 
-        print("Error:", e)
+        print("Error:",e)
 
-        time.sleep(10) 
+        Iq = conectar_iq()
+
+        time.sleep(10)
