@@ -4,9 +4,7 @@ from ai_learning import winrate
 
 
 def hora():
-
     ahora = time.localtime()
-
     return f"{ahora.tm_hour:02d}:{ahora.tm_min:02d}"
 
 
@@ -43,7 +41,7 @@ def mercado_lateral(cierres):
 
 
 # =====================================
-# MANIPULACION OTC
+# FILTRO MANIPULACION OTC
 # =====================================
 
 def manipulacion_otc(velas):
@@ -148,7 +146,8 @@ def vela_fuerte(v):
 
 def confirmacion_m5(conector, par):
 
-    velas = conector.api.get_candles(par, 300, 200, time.time())
+    # 🔧 SOLUCION ERROR EMA200
+    velas = conector.api.get_candles(par, 300, 300, time.time())
 
     cierres = [v['close'] for v in velas]
 
@@ -170,6 +169,7 @@ def confirmacion_m5(conector, par):
 
 def analizar(conector, par):
 
+    # 🔧 SOLUCION ERROR EMA
     velas = conector.api.get_candles(par, 60, 300, time.time())
 
     cierres = [v['close'] for v in velas]
