@@ -8,8 +8,8 @@ import ta
 # CONFIGURACIÓN
 # =========================
 
-TOKEN = "TU_TOKEN_DE_TELEGRAM"
-CHAT_ID = "TU_CHAT_ID"
+TOKEN = "8651397125:AAHHpJQ6j0_GNQ8HCTBPtHgitD5zBrfgz84"
+CHAT_ID = "8651397125"
 PAIR = "EURUSDT"
 
 # =========================
