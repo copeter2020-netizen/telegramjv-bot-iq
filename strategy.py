@@ -1,5 +1,6 @@
 import time
 import numpy as np
+from ai_learning import winrate
 
 
 def hora():
@@ -210,7 +211,22 @@ def analizar(conector, par):
     if volatilidad(cierres) > 0.00008:
         score += 1
 
-    if score < 6:
+
+    # =====================================
+    # IA ADAPTATIVA
+    # =====================================
+
+    wr = winrate()
+
+    if wr < 60:
+        minimo_score = 7
+    elif wr < 75:
+        minimo_score = 6
+    else:
+        minimo_score = 5
+
+
+    if score < minimo_score:
         return None
 
 
