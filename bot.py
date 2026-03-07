@@ -3,93 +3,94 @@ import requests
 import pandas as pd
 from datetime import datetime
 import ta
-from iqoptionapi.stable_api import IQ_Option
 
-IQ_EMAIL = "TU_EMAIL"
-IQ_PASSWORD = "TU_PASSWORD"
+# =========================
+# CONFIGURACION
+# =========================
 
-TELEGRAM_TOKEN = "TU_TOKEN"
+TELEGRAM_TOKEN = "TU_TOKEN_TELEGRAM"
 CHAT_ID = "TU_CHAT_ID"
 
-def conectar():
+API_KEY = "TU_API_KEY_TWELVEDATA"
 
-    while True:
+PAIRS = [
+    "EUR/USD",
+    "GBP/USD",
+    "AUD/USD",
+    "USD/CAD",
+    "EUR/JPY"
+]
 
-        print("Conectando a IQ Option...")
+# =========================
+# TELEGRAM
+# =========================
 
-        iq = IQ_Option(IQ_EMAIL, IQ_PASSWORD)
-
-        iq.connect()
-
-        if iq.check_connect():
-
-            print("Conectado correctamente")
-
-            iq.change_balance("PRACTICE")
-
-            return iq
-
-        else:
-
-            print("Error de conexión, reintentando...")
-
-            time.sleep(10)
-
-Iq = conectar()
-
-def enviar_senal(par, direccion):
+def send_signal(pair, direction):
 
     hora = datetime.utcnow().strftime("%H:%M:59")
 
     mensaje = f"""
 🚨 MEJOR SEÑAL
 
-Par: {par}
+Par: {pair}-OTC
 Hora: {hora}
-Dirección: {direccion}
+Dirección: {direction}
 Expiración: 1 minuto
 """
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
-    requests.post(url,data={"chat_id":CHAT_ID,"text":mensaje})
+    try:
+
+        requests.post(url,data={
+            "chat_id":CHAT_ID,
+            "text":mensaje
+        })
+
+    except:
+
+        print("Error enviando señal")
 
 
-def pares_otc():
+# =========================
+# DATOS DE MERCADO
+# =========================
 
-    activos = Iq.get_all_open_time()
+def get_data(pair):
 
-    pares = []
+    url = f"https://api.twelvedata.com/time_series?symbol={pair}&interval=1min&outputsize=200&apikey={API_KEY}"
 
-    for activo in activos["digital"]:
+    r = requests.get(url)
 
-        if "OTC" in activo and activos["digital"][activo]["open"]:
+    data = r.json()
 
-            pares.append(activo)
+    if "values" not in data:
 
-    return pares
+        print("Error API:",data)
 
+        return None
 
-def velas(par):
+    df = pd.DataFrame(data["values"])
 
-    candles = Iq.get_candles(par,60,200,time.time())
-
-    df = pd.DataFrame(candles)
-
-    df = df[["open","max","min","close"]]
-
-    df.columns = ["open","high","low","close"]
+    df = df[["open","high","low","close"]]
 
     df = df.astype(float)
+
+    df = df[::-1]
 
     return df
 
 
-def analizar(par):
+# =========================
+# ANALISIS
+# =========================
 
-    df = velas(par)
+def analyze(pair):
 
-    if len(df) < 50:
+    df = get_data(pair)
+
+    if df is None:
+
         return
 
     df["rsi"] = ta.momentum.RSIIndicator(df["close"],14).rsi()
@@ -100,41 +101,45 @@ def analizar(par):
 
     df["bb_low"] = bb.bollinger_lband()
 
-    ultima = df.iloc[-1]
+    last = df.iloc[-1]
 
-    cuerpo = abs(ultima["close"] - ultima["open"])
+    body = abs(last["close"] - last["open"])
 
-    wick_up = ultima["high"] - max(ultima["close"],ultima["open"])
+    wick_up = last["high"] - max(last["close"],last["open"])
 
-    wick_down = min(ultima["close"],ultima["open"]) - ultima["low"]
+    wick_down = min(last["close"],last["open"]) - last["low"]
 
-    if ultima["close"] < ultima["bb_low"] and ultima["rsi"] < 30 and wick_down > cuerpo:
+    # CALL
 
-        enviar_senal(par,"CALL")
+    if last["close"] < last["bb_low"] and last["rsi"] < 30 and wick_down > body:
 
-    if ultima["close"] > ultima["bb_high"] and ultima["rsi"] > 70 and wick_up > cuerpo:
+        send_signal(pair,"CALL")
 
-        enviar_senal(par,"PUT")
+    # PUT
+
+    if last["close"] > last["bb_high"] and last["rsi"] > 70 and wick_up > body:
+
+        send_signal(pair,"PUT")
 
 
-print("BOT OTC INICIADO")
+# =========================
+# LOOP PRINCIPAL
+# =========================
+
+print("BOT DE SEÑALES INICIADO")
 
 while True:
 
     try:
 
-        lista = pares_otc()
+        for pair in PAIRS:
 
-        print("Pares activos:", lista)
-
-        for par in lista:
-
-            analizar(par)
+            analyze(pair)
 
         time.sleep(60)
 
     except Exception as e:
 
-        print("Error:", e)
+        print("Error:",e)
 
-        Iq = conectar()
+        time.sleep(60) 
