@@ -1,4 +1,3 @@
- import requests
 import time
 import requests
 import pandas as pd
@@ -16,13 +15,6 @@ IQ_PASSWORD = "TU_PASSWORD_IQOPTION"
 
 TOKEN = "TU_TOKEN_TELEGRAM"
 CHAT_ID = "TU_CHAT_ID"
-
-PAIRS = [
-    "EURUSD-OTC",
-    "GBPUSD-OTC",
-    "AUDCAD-OTC",
-    "EURGBP-OTC"
-]
 
 # =========================
 # CONECTAR IQ OPTION
@@ -65,7 +57,27 @@ Expiración: 1 minuto
     })
 
 # =========================
-# OBTENER VELAS OTC
+# OBTENER PARES OTC ACTIVOS
+# =========================
+
+def get_otc_pairs():
+
+    pairs = []
+
+    all_assets = Iq.get_all_open_time()
+
+    for asset in all_assets["digital"]:
+
+        if "OTC" in asset:
+
+            if all_assets["digital"][asset]["open"]:
+
+                pairs.append(asset)
+
+    return pairs
+
+# =========================
+# OBTENER VELAS
 # =========================
 
 def get_data(pair):
@@ -114,14 +126,16 @@ def analyze(pair):
 
     # CALL
     if close_price < last["bb_low"] and last["rsi"] < 30 and wick_down > body:
+
         send_signal(pair,"CALL")
 
     # PUT
     if close_price > last["bb_high"] and last["rsi"] > 70 and wick_up > body:
+
         send_signal(pair,"PUT")
 
 # =========================
-# LOOP
+# LOOP PRINCIPAL
 # =========================
 
 print("BOT OTC INICIADO")
@@ -130,7 +144,11 @@ while True:
 
     try:
 
-        for pair in PAIRS:
+        pairs = get_otc_pairs()
+
+        print("Pares OTC activos:", pairs)
+
+        for pair in pairs:
 
             analyze(pair)
 
@@ -139,4 +157,4 @@ while True:
     except Exception as e:
 
         print("Error:", e)
-        time.sleep(60) 
+        time.sleep(60)
