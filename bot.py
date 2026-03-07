@@ -1,168 +1,147 @@
-import telebot
-import os
+import requests
+import pandas as pd
 import time
-import threading
-from iq_connector import ConectorIQ
-from strategy import analizar
+from datetime import datetime
+import ta
 
-# =====================================
-# VARIABLES
-# =====================================
+# =========================
+# CONFIGURACIÓN
+# =========================
 
-TOKEN = os.getenv("TOKEN")
-IQ_EMAIL = os.getenv("IQ_EMAIL")
-IQ_PASSWORD = os.getenv("IQ_PASSWORD")
+TOKEN = "TU_TOKEN_DE_TELEGRAM"
+CHAT_ID = "TU_CHAT_ID"
+PAIR = "EURUSDT"
 
-bot = telebot.TeleBot(TOKEN)
+# =========================
+# ENVIAR MENSAJE TELEGRAM
+# =========================
 
-conector = ConectorIQ(IQ_EMAIL, IQ_PASSWORD)
+def send_signal(pair, direction, prob, score):
 
-AUTO = False
-CHAT_ID = None
-ULTIMA_OPERACION = 0
+    now = datetime.utcnow()
+    entry_time = now.strftime("%H:%M:59")
 
+    message = f"""
+🚨 MEJOR SEÑAL
 
-# =====================================
-# PARES
-# =====================================
+Par: {pair}-OTC
+Hora: {entry_time}
+Dirección: {direction}
+Probabilidad: {prob}%
+Expiración: 1 minuto
+Score: {score}
+"""
 
-PARES = {
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-"EURUSD": "EURUSD-OTC",
-"GBPUSD": "GBPUSD-OTC",
-"EURGBP": "EURGBP-OTC",
-"AUDCAD": "AUDCAD-OTC"
+    requests.post(url, data={
+        "chat_id": CHAT_ID,
+        "text": message
+    })
 
-}
+# =========================
+# OBTENER DATOS DE MERCADO
+# =========================
 
+def get_data():
 
-# =====================================
-# CONECTAR
-# =====================================
+    url = f"https://api.binance.com/api/v3/klines?symbol={PAIR}&interval=1m&limit=200"
 
-def conectar():
+    response = requests.get(url)
+    data = response.json()
 
-    if conector.conectar():
-        print("✅ Conectado a IQ Option")
+    df = pd.DataFrame(data)
 
-    else:
-        print("❌ Error conexión IQ")
+    df = df[[1,2,3,4]]
+    df.columns = ["open","high","low","close"]
 
+    df = df.astype(float)
 
-conectar()
+    return df
 
+# =========================
+# ANALISIS DEL MERCADO
+# =========================
 
-# =====================================
-# ESPERAR CIERRE DE VELA
-# =====================================
+def analyze():
 
-def esperar_cierre():
+    df = get_data()
 
-    while True:
+    # RSI
+    df["rsi"] = ta.momentum.RSIIndicator(df["close"],14).rsi()
 
-        segundos = int(time.time()) % 60
+    # Bollinger
+    bb = ta.volatility.BollingerBands(df["close"],20)
 
-        if segundos >= 59:
-            break
+    df["bb_high"] = bb.bollinger_hband()
+    df["bb_low"] = bb.bollinger_lband()
 
-        time.sleep(0.5)
+    # EMA
+    ema = ta.trend.EMAIndicator(df["close"],50)
+    df["ema"] = ema.ema_indicator()
 
+    # ATR
+    atr = ta.volatility.AverageTrueRange(df["high"],df["low"],df["close"])
+    df["atr"] = atr.average_true_range()
 
-# =====================================
-# COMANDOS
-# =====================================
+    last = df.iloc[-1]
 
-@bot.message_handler(commands=['auto'])
-def auto(m):
+    open_price = last["open"]
+    close_price = last["close"]
+    high_price = last["high"]
+    low_price = last["low"]
 
-    global AUTO, CHAT_ID
+    body = abs(close_price - open_price)
 
-    AUTO = True
-    CHAT_ID = m.chat.id
+    wick_up = high_price - max(close_price, open_price)
+    wick_down = min(close_price, open_price) - low_price
 
-    bot.reply_to(m, "🚀 Bot activado")
+    # FILTRO MERCADO LATERAL
+    if last["atr"] < 0.0002:
+        return
 
+    # =====================
+    # SEÑAL CALL
+    # =====================
 
-@bot.message_handler(commands=['stop'])
-def stop(m):
+    if (
+        close_price < last["bb_low"]
+        and last["rsi"] < 30
+        and wick_down > body
+        and close_price > last["ema"]
+    ):
 
-    global AUTO
+        send_signal(PAIR, "CALL", 95, 9)
 
-    AUTO = False
+    # =====================
+    # SEÑAL PUT
+    # =====================
 
-    bot.reply_to(m, "⛔ Bot detenido")
+    if (
+        close_price > last["bb_high"]
+        and last["rsi"] > 70
+        and wick_up > body
+        and close_price < last["ema"]
+    ):
 
+        send_signal(PAIR, "PUT", 95, 9)
 
-# =====================================
-# ANALISIS AUTOMATICO
-# =====================================
+# =========================
+# LOOP PRINCIPAL
+# =========================
 
-def auto_signals():
+print("BOT DE SEÑALES INICIADO")
 
-    global AUTO
-    global ULTIMA_OPERACION
+while True:
 
-    while True:
+    try:
 
-        if AUTO and CHAT_ID:
+        analyze()
 
-            esperar_cierre()
+        time.sleep(60)
 
-            mejor_par = None
-            mejor_resultado = None
-            mejor_score = 0
+    except Exception as e:
 
-            print("📊 Analizando cierre de vela...")
+        print("Error:", e)
 
-            for par in PARES.values():
-
-                try:
-
-                    resultado = analizar(conector, par)
-
-                    if resultado:
-
-                        score = resultado["score"]
-
-                        if score > mejor_score:
-
-                            mejor_score = score
-                            mejor_par = par
-                            mejor_resultado = resultado
-
-                except Exception as e:
-
-                    print("Error analizando", par, e)
-
-            if mejor_resultado:
-
-                if time.time() - ULTIMA_OPERACION > 120:
-
-                    mensaje = (
-                        "🚨 MEJOR SEÑAL\n\n"
-                        f"Par: {mejor_par}\n"
-                        f"Hora: {mejor_resultado['hora']}\n"
-                        f"Dirección: {mejor_resultado['direccion']}\n"
-                        f"Probabilidad: {mejor_resultado['probabilidad']}%\n"
-                        f"Expiración: {mejor_resultado['expiracion']} minutos\n"
-                        f"Score: {mejor_resultado['score']}"
-                    )
-
-                    bot.send_message(CHAT_ID, mensaje)
-
-                    ULTIMA_OPERACION = time.time()
-
-                    print("✅ Señal enviada:", mejor_par)
-
-        time.sleep(1)
-
-
-# =====================================
-# INICIAR BOT
-# =====================================
-
-threading.Thread(target=auto_signals).start()
-
-print("🚀 BOT CORRIENDO...")
-
-bot.infinity_polling()
+        time.sleep(60)
