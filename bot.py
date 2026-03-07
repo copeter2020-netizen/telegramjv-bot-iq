@@ -5,58 +5,37 @@ from datetime import datetime
 import ta
 from iqoptionapi.stable_api import IQ_Option
 
-# =============================
-# CONFIGURACION
-# =============================
-
 IQ_EMAIL = "TU_EMAIL"
 IQ_PASSWORD = "TU_PASSWORD"
 
 TELEGRAM_TOKEN = "TU_TOKEN"
 CHAT_ID = "TU_CHAT_ID"
 
-# =============================
-# CONEXION IQ OPTION
-# =============================
-
-def conectar_iq():
+def conectar():
 
     while True:
 
-        try:
+        print("Conectando a IQ Option...")
 
-            print("Conectando a IQ Option...")
+        iq = IQ_Option(IQ_EMAIL, IQ_PASSWORD)
 
-            iq = IQ_Option(IQ_EMAIL, IQ_PASSWORD)
+        iq.connect()
 
-            iq.connect()
+        if iq.check_connect():
 
-            time.sleep(5)
+            print("Conectado correctamente")
 
-            if iq.check_connect():
+            iq.change_balance("PRACTICE")
 
-                print("Conexion exitosa")
+            return iq
 
-                iq.change_balance("PRACTICE")
+        else:
 
-                return iq
+            print("Error de conexión, reintentando...")
 
-            else:
+            time.sleep(10)
 
-                print("Error de conexion, reintentando...")
-
-        except Exception as e:
-
-            print("Error:", e)
-
-        time.sleep(10)
-
-
-Iq = conectar_iq()
-
-# =============================
-# TELEGRAM
-# =============================
+Iq = conectar()
 
 def enviar_senal(par, direccion):
 
@@ -73,24 +52,14 @@ Expiración: 1 minuto
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
-    try:
-
-        requests.post(url,data={"chat_id":CHAT_ID,"text":mensaje})
-
-    except:
-
-        print("Error enviando mensaje")
+    requests.post(url,data={"chat_id":CHAT_ID,"text":mensaje})
 
 
-# =============================
-# OBTENER PARES OTC
-# =============================
-
-def obtener_pares_otc():
-
-    pares = []
+def pares_otc():
 
     activos = Iq.get_all_open_time()
+
+    pares = []
 
     for activo in activos["digital"]:
 
@@ -101,15 +70,11 @@ def obtener_pares_otc():
     return pares
 
 
-# =============================
-# OBTENER VELAS
-# =============================
+def velas(par):
 
-def obtener_velas(par):
+    candles = Iq.get_candles(par,60,200,time.time())
 
-    velas = Iq.get_candles(par,60,200,time.time())
-
-    df = pd.DataFrame(velas)
+    df = pd.DataFrame(candles)
 
     df = df[["open","max","min","close"]]
 
@@ -120,13 +85,9 @@ def obtener_velas(par):
     return df
 
 
-# =============================
-# ANALISIS
-# =============================
-
 def analizar(par):
 
-    df = obtener_velas(par)
+    df = velas(par)
 
     if len(df) < 50:
         return
@@ -143,26 +104,18 @@ def analizar(par):
 
     cuerpo = abs(ultima["close"] - ultima["open"])
 
-    mecha_arriba = ultima["high"] - max(ultima["close"],ultima["open"])
+    wick_up = ultima["high"] - max(ultima["close"],ultima["open"])
 
-    mecha_abajo = min(ultima["close"],ultima["open"]) - ultima["low"]
+    wick_down = min(ultima["close"],ultima["open"]) - ultima["low"]
 
-    # CALL
-
-    if ultima["close"] < ultima["bb_low"] and ultima["rsi"] < 30 and mecha_abajo > cuerpo:
+    if ultima["close"] < ultima["bb_low"] and ultima["rsi"] < 30 and wick_down > cuerpo:
 
         enviar_senal(par,"CALL")
 
-    # PUT
-
-    if ultima["close"] > ultima["bb_high"] and ultima["rsi"] > 70 and mecha_arriba > cuerpo:
+    if ultima["close"] > ultima["bb_high"] and ultima["rsi"] > 70 and wick_up > cuerpo:
 
         enviar_senal(par,"PUT")
 
-
-# =============================
-# LOOP PRINCIPAL
-# =============================
 
 print("BOT OTC INICIADO")
 
@@ -170,11 +123,11 @@ while True:
 
     try:
 
-        pares = obtener_pares_otc()
+        lista = pares_otc()
 
-        print("Pares OTC activos:", pares)
+        print("Pares activos:", lista)
 
-        for par in pares:
+        for par in lista:
 
             analizar(par)
 
@@ -182,8 +135,6 @@ while True:
 
     except Exception as e:
 
-        print("Error:",e)
+        print("Error:", e)
 
-        Iq = conectar_iq()
-
-        time.sleep(10)
+        Iq = conectar()
