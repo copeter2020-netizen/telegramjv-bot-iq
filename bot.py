@@ -21,8 +21,9 @@ AUTO = False
 CHAT_ID = None
 ULTIMA_OPERACION = 0
 
+
 # =====================================
-# PARES A ANALIZAR
+# PARES
 # =====================================
 
 PARES = {
@@ -34,8 +35,9 @@ PARES = {
 
 }
 
+
 # =====================================
-# CONECTAR IQ OPTION
+# CONECTAR
 # =====================================
 
 def conectar():
@@ -49,8 +51,25 @@ def conectar():
 
 conectar()
 
+
 # =====================================
-# COMANDO AUTO
+# ESPERAR CIERRE DE VELA
+# =====================================
+
+def esperar_cierre():
+
+    while True:
+
+        segundos = int(time.time()) % 60
+
+        if segundos >= 59:
+            break
+
+        time.sleep(0.5)
+
+
+# =====================================
+# COMANDOS
 # =====================================
 
 @bot.message_handler(commands=['auto'])
@@ -63,10 +82,6 @@ def auto(m):
 
     bot.reply_to(m, "🚀 Bot activado")
 
-
-# =====================================
-# COMANDO STOP
-# =====================================
 
 @bot.message_handler(commands=['stop'])
 def stop(m):
@@ -91,11 +106,13 @@ def auto_signals():
 
         if AUTO and CHAT_ID:
 
+            esperar_cierre()
+
             mejor_par = None
             mejor_resultado = None
             mejor_score = 0
 
-            print("🔎 Analizando mercado...")
+            print("📊 Analizando cierre de vela...")
 
             for par in PARES.values():
 
@@ -122,7 +139,7 @@ def auto_signals():
                 if time.time() - ULTIMA_OPERACION > 120:
 
                     mensaje = (
-                        "🚨 MEJOR SEÑAL DEL MERCADO\n\n"
+                        "🚨 MEJOR SEÑAL\n\n"
                         f"Par: {mejor_par}\n"
                         f"Hora: {mejor_resultado['hora']}\n"
                         f"Dirección: {mejor_resultado['direccion']}\n"
@@ -137,7 +154,7 @@ def auto_signals():
 
                     print("✅ Señal enviada:", mejor_par)
 
-        time.sleep(10)
+        time.sleep(1)
 
 
 # =====================================
@@ -148,4 +165,4 @@ threading.Thread(target=auto_signals).start()
 
 print("🚀 BOT CORRIENDO...")
 
-bot.infinity_polling() 
+bot.infinity_polling()
