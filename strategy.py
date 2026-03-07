@@ -4,7 +4,7 @@ from ai_learning import winrate
 
 
 # =====================================
-# HORA DE ENTRADA EXACTA
+# HORA EXACTA DE ENTRADA
 # =====================================
 
 def hora_entrada():
@@ -41,13 +41,32 @@ def volatilidad(cierres):
     return np.std(cierres[-20:])
 
 
+# =====================================
+# SOPORTE Y RESISTENCIA
+# =====================================
+
+def soporte_resistencia(velas):
+
+    highs = [v['max'] for v in velas[-40:]]
+    lows = [v['min'] for v in velas[-40:]]
+
+    resistencia = max(highs)
+    soporte = min(lows)
+
+    return soporte, resistencia
+
+
+# =====================================
+# FILTRO MERCADO LATERAL
+# =====================================
+
 def mercado_lateral(cierres):
 
     return volatilidad(cierres) < 0.00004
 
 
 # =====================================
-# FILTRO MANIPULACION OTC
+# DETECTAR MANIPULACION OTC
 # =====================================
 
 def manipulacion_otc(velas):
@@ -58,57 +77,7 @@ def manipulacion_otc(velas):
 
     ultima = velas[-1]['max'] - velas[-1]['min']
 
-    return ultima > media * 3
-
-
-# =====================================
-# LIQUIDITY SWEEP
-# =====================================
-
-def liquidez(velas):
-
-    highs = [v['max'] for v in velas[-20:]]
-    lows = [v['min'] for v in velas[-20:]]
-
-    maximo = max(highs)
-    minimo = min(lows)
-
-    ultima = velas[-1]
-
-    if ultima['max'] > maximo:
-        return "PUT"
-
-    if ultima['min'] < minimo:
-        return "CALL"
-
-    return None
-
-
-# =====================================
-# ORDER BLOCK
-# =====================================
-
-def order_block(velas):
-
-    for v in velas[-10:]:
-
-        cuerpo = abs(v['close'] - v['open'])
-        rango = v['max'] - v['min']
-
-        if rango == 0:
-            continue
-
-        fuerza = cuerpo / rango
-
-        if fuerza > 0.7:
-
-            if v['close'] > v['open']:
-                return "CALL"
-
-            if v['close'] < v['open']:
-                return "PUT"
-
-    return None
+    return ultima > media * 2.5
 
 
 # =====================================
@@ -131,6 +100,28 @@ def engulfing(v1, v2):
 
 
 # =====================================
+# PINBAR
+# =====================================
+
+def pinbar_alcista(v):
+
+    cuerpo = abs(v['close'] - v['open'])
+
+    mecha = min(v['open'], v['close']) - v['min']
+
+    return mecha > cuerpo * 2
+
+
+def pinbar_bajista(v):
+
+    cuerpo = abs(v['close'] - v['open'])
+
+    mecha = v['max'] - max(v['open'], v['close'])
+
+    return mecha > cuerpo * 2
+
+
+# =====================================
 # VELA FUERTE
 # =====================================
 
@@ -147,7 +138,7 @@ def vela_fuerte(v):
 
 
 # =====================================
-# CONFIRMACION M5
+# CONFIRMACION TENDENCIA M5
 # =====================================
 
 def confirmacion_m5(conector, par):
@@ -169,28 +160,7 @@ def confirmacion_m5(conector, par):
 
 
 # =====================================
-# EXPIRACION AUTOMATICA
-# =====================================
-
-def calcular_expiracion(score):
-
-    if score >= 9:
-        return 5
-
-    if score == 8:
-        return 4
-
-    if score == 7:
-        return 3
-
-    if score == 6:
-        return 2
-
-    return 1
-
-
-# =====================================
-# ANALIZAR
+# ANALIZAR MERCADO
 # =====================================
 
 def analizar(conector, par):
@@ -205,6 +175,8 @@ def analizar(conector, par):
     if manipulacion_otc(velas):
         return None
 
+    soporte, resistencia = soporte_resistencia(velas)
+
     v1 = velas[-2]
     v2 = velas[-1]
 
@@ -212,20 +184,26 @@ def analizar(conector, par):
 
     tendencia = confirmacion_m5(conector, par)
 
-    sweep = liquidez(velas)
-
-    bloque = order_block(velas)
-
     score = 0
 
-    if sweep:
+
+    # soporte
+    if v2['min'] <= soporte * 1.002:
+
         score += 2
 
-    if bloque:
+        if pinbar_alcista(v2) or patron == "CALL":
+            score += 2
+
+
+    # resistencia
+    if v2['max'] >= resistencia * 0.998:
+
         score += 2
 
-    if patron:
-        score += 2
+        if pinbar_bajista(v2) or patron == "PUT":
+            score += 2
+
 
     if tendencia:
         score += 2
@@ -236,6 +214,8 @@ def analizar(conector, par):
     if volatilidad(cierres) > 0.00008:
         score += 1
 
+
+    # IA ADAPTATIVA
 
     wr = winrate()
 
@@ -251,10 +231,12 @@ def analizar(conector, par):
         return None
 
 
-    expiracion = calcular_expiracion(score)
+    # EXPIRACION FIJA 1 MINUTO
+
+    expiracion = 1
 
 
-    if (patron == "CALL" or sweep == "CALL" or bloque == "CALL") and tendencia == "CALL":
+    if v2['min'] <= soporte * 1.002 and tendencia == "CALL":
 
         return {
             "direccion": "CALL",
@@ -265,7 +247,7 @@ def analizar(conector, par):
         }
 
 
-    if (patron == "PUT" or sweep == "PUT" or bloque == "PUT") and tendencia == "PUT":
+    if v2['max'] >= resistencia * 0.998 and tendencia == "PUT":
 
         return {
             "direccion": "PUT",
@@ -275,4 +257,4 @@ def analizar(conector, par):
             "score": score
         }
 
-    return None
+    return None 
